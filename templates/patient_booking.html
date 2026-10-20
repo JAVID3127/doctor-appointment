@@ -376,9 +376,16 @@ async function onDoctorChange() {
         }
 
         slots.forEach(slot => {
-            const label = `${slot.start_time} - ${slot.end_time}` + (slot.is_booked ? ' (Overbook Option)' : ' (Primary Open)');
+            const isBooked = slot.is_booked;
+            const label = `${slot.start_time} - ${slot.end_time}` + (isBooked ? ' (Overbook Buffer)' : ' (Open Primary Slot)');
             slotSelect.innerHTML += `<option value="${slot.slot_id}">${label}</option>`;
         });
+
+        // Automatically pre-select first open unbooked slot
+        const firstOpen = slots.find(s => !s.is_booked);
+        if (firstOpen) {
+            slotSelect.value = firstOpen.slot_id;
+        }
         slotSelect.disabled = false;
     } catch (e) {
         showError("Failed to load slots: " + e.message);

@@ -99,7 +99,15 @@ class HospitalOPDService:
         query = self.session.query(Doctor)
         if dept_id:
             query = query.filter(Doctor.dept_id == dept_id)
-        return query.order_by(Doctor.name).all()
+        docs = query.order_by(Doctor.name).all()
+        # Deduplicate doctors by room_number to prevent duplicate roster listings
+        seen_rooms = set()
+        unique_docs = []
+        for d in docs:
+            if d.room_number not in seen_rooms:
+                seen_rooms.add(d.room_number)
+                unique_docs.append(d)
+        return unique_docs
 
     def get_doctor_by_id(self, doctor_id: int) -> Optional[Doctor]:
         return self.session.query(Doctor).filter(Doctor.doctor_id == doctor_id).first()
@@ -109,12 +117,39 @@ class HospitalOPDService:
         start_bound = datetime.combine(t_date, datetime.min.time())
         end_bound = datetime.combine(t_date, datetime.max.time())
 
-        return self.session.query(TimeSlot).filter(
+        # Check existing slots for this doctor on target date
+        slots = self.session.query(TimeSlot).filter(
             TimeSlot.doctor_id == doctor_id,
             TimeSlot.start_time >= start_bound,
             TimeSlot.start_time <= end_bound,
             TimeSlot.is_overbooked == False
         ).order_by(TimeSlot.start_time).all()
+
+        # If doctor has fewer than 6 slots for this date, dynamically generate today's consultation intervals
+        if len(slots) < 6:
+            doc = self.get_doctor_by_id(doctor_id)
+            if doc:
+                interval = doc.department.default_slot_duration_mins if doc.department else 15
+                base_time = datetime(t_date.year, t_date.month, t_date.day, 9, 0)
+                for i in range(12):
+                    st = base_time + timedelta(minutes=i * interval)
+                    et = st + timedelta(minutes=interval)
+                    collision = self.session.query(TimeSlot).filter(
+                        TimeSlot.doctor_id == doctor_id,
+                        TimeSlot.start_time == st
+                    ).first()
+                    if not collision:
+                        new_slot = TimeSlot(doctor_id=doctor_id, start_time=st, end_time=et, is_booked=False, is_overbooked=False)
+                        self.session.add(new_slot)
+                self.session.commit()
+                slots = self.session.query(TimeSlot).filter(
+                    TimeSlot.doctor_id == doctor_id,
+                    TimeSlot.start_time >= start_bound,
+                    TimeSlot.start_time <= end_bound,
+                    TimeSlot.is_overbooked == False
+                ).order_by(TimeSlot.start_time).all()
+
+        return slots
 
     def predict_no_show_probability(self, lead_days: int, past_ratio: float, sms_sent: bool, age: int) -> float:
         """Calculates calibrated probability using the trained Week 4 ML feature equation."""
