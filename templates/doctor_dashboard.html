@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+
+{% block title %}Doctor Consultation Room - {{ doctor.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="p-4 bg-white rounded-3 shadow-sm border d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <h3 class="fw-bold mb-0 text-dark">{{ doctor.name }}</h3>
+                    <span class="badge bg-primary fs-6">{{ doctor.room_number }}</span>
+                    {% if doctor.is_available %}
+                    <span class="badge bg-success"><i class="bi bi-circle-fill small me-1"></i>On Duty</span>
+                    {% else %}
+                    <span class="badge bg-danger">On Emergency Leave</span>
+                    {% endif %}
+                </div>
+                <p class="text-muted mb-0">{{ doctor.specialization }} &bull; Department Slot Duration: {{ doctor.department.default_slot_duration_mins }} Mins &bull; Room {{ doctor.room_number }}</p>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-outline-primary" onclick="rebalanceQueue({{ doctor.dept_id }})">
+                    <i class="bi bi-shuffle me-1"></i> Rebalance Queue
+                </button>
+                {% if doctor.is_available %}
+                <button class="btn btn-outline-danger" onclick="triggerDoctorLeave({{ doctor.doctor_id }})">
+                    <i class="bi bi-box-arrow-right me-1"></i> Emergency Leave
+                </button>
+                {% else %}
+                <button class="btn btn-secondary" disabled>Unavailable</button>
+                {% endif %}
+                <a href="{{ url_for('token_display') }}" target="_blank" class="btn btn-outline-dark">
+                    <i class="bi bi-tv me-1"></i> Waiting Hall Screen
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Consultation Live Pacing Stopwatch Banner -->
+{% set active_appt = None %}
+{% for a in appointments %}
+    {% if a.status.value == 'IN_CONSULTATION' %}
+        {% set active_appt = a %}
+    {% endif %}
+{% endfor %}
+
+{% if active_appt %}
+<div class="card shadow-sm border-0 mb-4 bg-primary text-white border-start border-warning border-5">
+    <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="p-3 bg-white bg-opacity-25 rounded-circle text-center" style="width: 65px; height: 65px;">
+                <i class="bi bi-heart-pulse-fill fs-2"></i>
+            </div>
+            <div>
+                <span class="badge bg-warning text-dark text-uppercase fw-bold mb-1">Currently in Room Examination</span>
+                <h4 class="fw-bold mb-0">{{ active_appt.patient.name }} (Token #{{ active_appt.appointment_id }})</h4>
+                <div class="text-white-50 small">{{ active_appt.patient.age }} Yrs, {{ active_appt.patient.gender }} &bull; Ph: {{ active_appt.patient.phone }}</div>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-4">
+            <div class="text-center">
+                <div class="small text-white-50 text-uppercase fw-bold">Consultation Pacing Timer</div>
+                <div id="stopwatchDisplay" class="display-6 fw-bold font-monospace text-warning">00:00</div>
+                <div id="pacingBadge" class="badge bg-success px-2 py-1">On Schedule (&lt;{{ doctor.department.default_slot_duration_mins }}m)</div>
+            </div>
+            <div class="d-flex flex-column gap-2">
+                <button class="btn btn-warning fw-bold text-dark" onclick="openPrescriptionModal({{ active_appt.appointment_id }}, '{{ active_appt.patient.name }}')">
+                    <i class="bi bi-file-earmark-medical me-1"></i> Write E-Prescription
+                </button>
+                <button class="btn btn-outline-light btn-sm" onclick="updateApptStatus({{ active_appt.appointment_id }}, 'COMPLETED')">
+                    <i class="bi bi-check2-circle me-1"></i> Finish Consultation
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Alert Banner for Feedback -->
+<div id="actionAlert" class="alert alert-dismissible fade show d-none" role="alert">
+    <span id="alertMessage"></span>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+
+<!-- Main Table of Appointments for this Doctor -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="fw-bold mb-0"><i class="bi bi-calendar-check text-primary me-2"></i>Today's OPD Consultation Schedule</h5>
+                <span class="badge bg-light text-dark border">{{ appointments|length }} Consultations Scheduled</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Token / ID</th>
+                            <th>Time Slot</th>
+                            <th>Patient Name</th>
+                            <th>Phone / Age</th>
+                            <th>No-Show Risk (AI)</th>
+                            <th>Overbook Type</th>
+                            <th>Status</th>
+                            <th class="text-end">Clinical Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if appointments %}
+                            {% for appt in appointments %}
+                            <tr id="row-appt-{{ appt.appointment_id }}">
+                                <td class="fw-bold font-monospace text-primary">#{{ appt.appointment_id }}</td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">
+                                        {{ appt.slot.start_time.strftime('%H:%M') }} - {{ appt.slot.end_time.strftime('%H:%M') }}
+                                    </span>
+                                </td>
+                                <td class="fw-bold">{{ appt.patient.name }}</td>
+                                <td class="text-muted small">{{ appt.patient.phone }} ({{ appt.patient.age }}y, {{ appt.patient.gender }})</td>
+                                <td>
+                                    {% set risk = (appt.predicted_no_show_prob * 100)|round(1) %}
+                                    <a href="javascript:void(0)" onclick="openXAIModal({{ appt.appointment_id }}, '{{ appt.patient.name }}')" class="text-decoration-none">
+                                        {% if risk >= 50 %}
+                                        <span class="badge bg-danger-subtle text-danger border border-danger">{{ risk }}% High <i class="bi bi-question-circle ms-1"></i></span>
+                                        {% elif risk >= 25 %}
+                                        <span class="badge bg-warning-subtle text-warning border border-warning">{{ risk }}% Med <i class="bi bi-question-circle ms-1"></i></span>
+                                        {% else %}
+                                        <span class="badge bg-success-subtle text-success border border-success">{{ risk }}% Low <i class="bi bi-question-circle ms-1"></i></span>
+                                        {% endif %}
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if appt.is_secondary_overbook %}
+                                    <span class="badge bg-warning text-dark"><i class="bi bi-layers-half me-1"></i> Overbook +1</span>
+                                    {% else %}
+                                    <span class="badge bg-light text-muted border">Primary</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if appt.status.value == 'COMPLETED' %}
+                                    <span class="badge bg-success">COMPLETED</span>
+                                    {% elif appt.status.value == 'IN_CONSULTATION' %}
+                                    <span class="badge bg-primary">IN CONSULTATION</span>
+                                    {% elif appt.status.value == 'CHECKED_IN' %}
+                                    <span class="badge bg-info text-dark">WAITING</span>
+                                    {% elif appt.status.value == 'CANCELLED' %}
+                                    <span class="badge bg-danger">CANCELLED</span>
+                                    {% elif appt.status.value == 'NO_SHOW' %}
+                                    <span class="badge bg-secondary">NO-SHOW</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ appt.status.value }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        {% if appt.status.value == 'BOOKED' or appt.status.value == 'CONFIRMED' %}
+                                        <button class="btn btn-outline-info" onclick="updateApptStatus({{ appt.appointment_id }}, 'CHECKED_IN')" title="Mark Patient Arrived">Check In</button>
+                                        {% endif %}
+                                        {% if appt.status.value == 'CHECKED_IN' %}
+                                        <button class="btn btn-primary" onclick="updateApptStatus({{ appt.appointment_id }}, 'IN_CONSULTATION')" title="Call Patient to Room">Call Room</button>
+                                        {% endif %}
+                                        <button class="btn btn-outline-success" onclick="openPrescriptionModal({{ appt.appointment_id }}, '{{ appt.patient.name }}')" title="Prescription & Done">Rx</button>
+                                        <button class="btn btn-outline-secondary" onclick="updateApptStatus({{ appt.appointment_id }}, 'NO_SHOW')" title="Mark No Show">Absent</button>
+                                        <a href="/api/fhir/Appointment/{{ appt.appointment_id }}" target="_blank" class="btn btn-outline-dark" title="FHIR v4 JSON"><i class="bi bi-file-code"></i></a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="8" class="text-center py-4 text-muted">
+                                    No appointments currently scheduled for Dr. {{ doctor.name }}.
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL 1: Digital E-Prescription Form -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="prescriptionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-medical-fill me-2"></i>Issue E-Prescription</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <strong>Patient:</strong> <span id="rxModalPatient" class="text-primary fw-bold"></span> &bull; 
+                    <strong>Doctor:</strong> Dr. {{ doctor.name }} ({{ doctor.specialization }})
+                </div>
+                <input type="hidden" id="rxApptId">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Clinical Diagnosis *</label>
+                    <input type="text" id="rxDiagnosis" class="form-control" placeholder="e.g. Essential Hypertension / Viral URI" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Prescribed Medicines &amp; Dosages (One per line) *</label>
+                    <textarea id="rxMedicines" class="form-control font-monospace" rows="4" placeholder="Tab Amlodipine 5mg - 1 Tab Daily Morning&#10;Tab Paracetamol 650mg - SOS Post Meals&#10;Cap Omeprazole 20mg - 1 Cap Before Breakfast" required></textarea>
+                    <div class="form-text small">Format: <code>Medicine Name - Dosage / Frequency</code></div>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-8">
+                        <label class="form-label fw-semibold">Clinical Advice / Lifestyle Guidance</label>
+                        <input type="text" id="rxAdvice" class="form-control" placeholder="e.g. Low sodium diet, hydration, 30 min walk daily">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Follow-up Consultation</label>
+                        <div class="input-group">
+                            <input type="number" id="rxFollowUp" class="form-control" value="7" min="1" max="90">
+                            <span class="input-group-text">Days</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success fw-bold" onclick="savePrescription()">
+                    <i class="bi bi-check2-circle me-1"></i> Save, Complete &amp; View Slip
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL 2: Explainable AI (XAI) Risk Factor Decomposition -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="xaiModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-cpu-fill text-warning me-2"></i>Explainable AI (XAI) Risk Breakdown</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h6 class="fw-bold mb-0" id="xaiPatientName">Patient</h6>
+                        <small class="text-muted">Machine Learning Attendance Risk Modeling</small>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-primary fs-5" id="xaiRiskPercent">0%</span>
+                        <div class="small fw-bold text-muted" id="xaiCategory">Category</div>
+                    </div>
+                </div>
+                <hr>
+                <h6 class="text-uppercase fw-bold text-secondary small mb-3">Model Driver Contributions</h6>
+                <div id="xaiDriversList" class="d-flex flex-column gap-2">
+                    <!-- Dynamic drivers injected -->
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ==========================================
+// Consultation Stopwatch Logic
+// ==========================================
+let timerSeconds = 0;
+const slotDurationMins = {{ doctor.department.default_slot_duration_mins }};
+const stopwatchEl = document.getElementById('stopwatchDisplay');
+const pacingBadge = document.getElementById('pacingBadge');
+
+if (stopwatchEl) {
+    setInterval(() => {
+        timerSeconds++;
+        const mins = Math.floor(timerSeconds / 60);
+        const secs = timerSeconds % 60;
+        stopwatchEl.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+        if (mins >= slotDurationMins) {
+            pacingBadge.className = 'badge bg-danger px-2 py-1';
+            pacingBadge.textContent = `Overdue (+${mins - slotDurationMins}m Over Target)`;
+        } else if (mins >= slotDurationMins - 3) {
+            pacingBadge.className = 'badge bg-warning text-dark px-2 py-1';
+            pacingBadge.textContent = 'Wrapping Up (<3m Remaining)';
+        } else {
+            pacingBadge.className = 'badge bg-success px-2 py-1';
+            pacingBadge.textContent = 'On Schedule';
+        }
+    }, 1000);
+}
+
+// ==========================================
+// Status Update & Rebalance
+// ==========================================
+async function updateApptStatus(apptId, status) {
+    try {
+        const res = await fetch(`/api/appointments/${apptId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const result = await res.json();
+        if (result.success) {
+            showAlert(`Appointment #${apptId} status changed to ${status}`, 'success');
+            setTimeout(() => window.location.reload(), 600);
+        } else {
+            showAlert(`Error: ${result.error}`, 'danger');
+        }
+    } catch (err) {
+        showAlert(`Network error: ${err.message}`, 'danger');
+    }
+}
+
+async function rebalanceQueue(deptId) {
+    try {
+        const res = await fetch(`/api/departments/${deptId}/rebalance`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await res.json();
+        if (result.success) {
+            alert(result.message);
+            window.location.reload();
+        } else {
+            alert(result.message || result.error);
+        }
+    } catch (err) {
+        alert("Failed to execute workload rebalancer: " + err.message);
+    }
+}
+
+async function triggerDoctorLeave(doctorId) {
+    if (!confirm("Are you sure? This marks the doctor on leave and cascades all active appointments to available peers in the same specialty.")) {
+        return;
+    }
+    try {
+        const res = await fetch(`/api/doctors/${doctorId}/leave`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await res.json();
+        if (result.success) {
+            alert(`Doctor on Leave! Reassigned ${result.data.reassigned_count} appointments.`);
+            window.location.reload();
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    } catch (err) {
+        alert(`Network error: ${err.message}`);
+    }
+}
+
+// ==========================================
+// Prescription Modal Handlers
+// ==========================================
+function openPrescriptionModal(apptId, patientName) {
+    document.getElementById('rxApptId').value = apptId;
+    document.getElementById('rxModalPatient').textContent = patientName;
+    document.getElementById('rxDiagnosis').value = '';
+    document.getElementById('rxMedicines').value = '';
+    document.getElementById('rxAdvice').value = '';
+    const modal = new bootstrap.Modal(document.getElementById('prescriptionModal'));
+    modal.show();
+}
+
+async function savePrescription() {
+    const apptId = document.getElementById('rxApptId').value;
+    const diagnosis = document.getElementById('rxDiagnosis').value.trim();
+    const medicines = document.getElementById('rxMedicines').value.trim();
+    const advice = document.getElementById('rxAdvice').value.trim();
+    const followUp = document.getElementById('rxFollowUp').value;
+
+    if (!diagnosis || !medicines) {
+        alert("Please enter diagnosis and prescribed medicines.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/appointments/${apptId}/prescription`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                diagnosis: diagnosis,
+                medicines: medicines,
+                advice: advice,
+                follow_up_days: parseInt(followUp)
+            })
+        });
+        const result = await res.json();
+        if (result.success) {
+            window.location.href = `/prescription/${apptId}`;
+        } else {
+            alert("Error: " + result.error);
+        }
+    } catch (err) {
+        alert("Failed to save prescription: " + err.message);
+    }
+}
+
+// ==========================================
+// Explainable AI (XAI) Modal
+// ==========================================
+async function openXAIModal(apptId, patientName) {
+    document.getElementById('xaiPatientName').textContent = patientName;
+    try {
+        const res = await fetch(`/api/appointments/${apptId}/xai-explain`);
+        const json = await res.json();
+        if (json.success) {
+            const data = json.data;
+            document.getElementById('xaiRiskPercent').textContent = data.risk_percentage;
+            document.getElementById('xaiCategory').textContent = data.category;
+            
+            const listEl = document.getElementById('xaiDriversList');
+            listEl.innerHTML = data.drivers.map(d => `
+                <div class="p-2 border rounded bg-light d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-semibold small">${d.factor}</div>
+                        <div class="text-muted" style="font-size: 0.8rem;">${d.reason}</div>
+                    </div>
+                    <span class="badge bg-${d.direction} font-monospace fs-6">${d.impact}</span>
+                </div>
+            `).join('');
+
+            const modal = new bootstrap.Modal(document.getElementById('xaiModal'));
+            modal.show();
+        }
+    } catch (e) {
+        alert("Failed to load XAI breakdown: " + e.message);
+    }
+}
+
+function showAlert(msg, type) {
+    const box = document.getElementById('actionAlert');
+    const msgEl = document.getElementById('alertMessage');
+    box.className = `alert alert-${type} alert-dismissible fade show`;
+    msgEl.textContent = msg;
+    box.classList.remove('d-none');
+}
+</script>
+{% endblock %}

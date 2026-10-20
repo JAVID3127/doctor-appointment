@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Emergency Walk-in Triage Desk{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow border-danger border-2">
+            <div class="card-header bg-danger text-white py-3 d-flex justify-content-between align-items-center">
+                <h4 class="fw-bold mb-0"><i class="bi bi-shield-fill-plus me-2"></i>Emergency Walk-in Triage &amp; Preemption Desk</h4>
+                <span class="badge bg-white text-danger fw-bold">OPD PRIORITY OVERRIDE</span>
+            </div>
+            <div class="card-body p-4">
+                <div class="alert alert-warning mb-4">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>Clinical Priority Protocol:</strong> Walk-in emergency registrations immediately trigger doctor room preemption. Scheduled appointments are shifted or safely reassigned.
+                </div>
+
+                <form id="triageForm" onsubmit="handleTriage(event)">
+                    <!-- Patient Details -->
+                    <h5 class="fw-bold text-secondary mb-3 border-bottom pb-2">1. Emergency Patient Identification</h5>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Patient Name *</label>
+                            <input type="text" class="form-control" id="triageName" required placeholder="e.g. Anand V.">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Contact / Attendant Phone *</label>
+                            <input type="tel" class="form-control" id="triagePhone" required placeholder="e.g. 9811223344">
+                        </div>
+                    </div>
+
+                    <!-- Department -->
+                    <h5 class="fw-bold text-secondary mb-3 border-bottom pb-2">2. Target Clinical Department</h5>
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Department *</label>
+                        <select class="form-select" id="triageDept" required>
+                            <option value="" disabled selected>Select Medical Specialty...</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept.dept_id }}">{{ dept.dept_name }} (Floor {{ dept.floor_number }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Severity Scale -->
+                    <h5 class="fw-bold text-secondary mb-3 border-bottom pb-2">3. Triage Acuity Level (Emergency Severity Index)</h5>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="card border-danger h-100 p-3 bg-danger-subtle">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="severityRadio" id="sev1" value="1" checked>
+                                    <label class="form-check-label fw-bold text-danger" for="sev1">
+                                        Level 1 - CRITICAL (Red)
+                                    </label>
+                                </div>
+                                <small class="text-muted ps-4">Immediate life threat (Arrest, respiratory distress, acute infarction). Preempts instantly.</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-warning h-100 p-3 bg-warning-subtle">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="severityRadio" id="sev2" value="2">
+                                    <label class="form-check-label fw-bold text-warning-emphasis" for="sev2">
+                                        Level 2 - URGENT (Orange)
+                                    </label>
+                                </div>
+                                <small class="text-muted ps-4">High risk, acute chest pain, severe fracture, or vital sign instability.</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-info h-100 p-3 bg-info-subtle">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="severityRadio" id="sev3" value="3">
+                                    <label class="form-check-label fw-bold text-info-emphasis" for="sev3">
+                                        Level 3 - SEMI-URGENT (Yellow)
+                                    </label>
+                                </div>
+                                <small class="text-muted ps-4">High fever, abdominal distress, multiple resource needs.</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-success h-100 p-3 bg-success-subtle">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="severityRadio" id="sev4" value="4">
+                                    <label class="form-check-label fw-bold text-success-emphasis" for="sev4">
+                                        Level 4 - NON-URGENT (Green)
+                                    </label>
+                                </div>
+                                <small class="text-muted ps-4">Mild symptoms, standard walk-in queueing.</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dispatch Button -->
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-danger btn-lg fw-bold" id="dispatchBtn">
+                            <i class="bi bi-lightning-charge-fill me-2"></i> Register Emergency &amp; Preempt Room
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Triage Dispatch Result Card -->
+                <div id="triageResult" class="mt-4 p-4 bg-light rounded border border-success d-none">
+                    <h5 class="fw-bold text-success mb-2"><i class="bi bi-check-circle-fill me-2"></i>Emergency Triage Dispatched!</h5>
+                    <div class="row g-2">
+                        <div class="col-sm-6"><strong>Patient:</strong> <span id="resPatient"></span></div>
+                        <div class="col-sm-6"><strong>Acuity Level:</strong> <span class="badge bg-danger" id="resSeverity">Level 1</span></div>
+                        <div class="col-sm-6"><strong>Assigned Doctor:</strong> <span id="resDoctor"></span></div>
+                        <div class="col-sm-6"><strong>Room Preempted:</strong> <span class="badge bg-primary" id="resRoom"></span></div>
+                        <div class="col-12 mt-2">
+                            <a href="{{ url_for('token_display') }}" target="_blank" class="btn btn-sm btn-dark">View on Live Token Display ↗</a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function handleTriage(e) {
+    e.preventDefault();
+    const btn = document.getElementById('dispatchBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Preempting Room...';
+
+    const severityRadio = document.querySelector('input[name="severityRadio"]:checked');
+    const payload = {
+        patient_name: document.getElementById('triageName').value.trim(),
+        phone: document.getElementById('triagePhone').value.trim(),
+        dept_id: parseInt(document.getElementById('triageDept').value),
+        severity: parseInt(severityRadio.value)
+    };
+
+    try {
+        const res = await fetch('/api/triage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+
+        if (json.success) {
+            const data = json.data;
+            document.getElementById('resPatient').textContent = data.patient_name;
+            document.getElementById('resSeverity').textContent = `Level ${data.severity_level}`;
+            document.getElementById('resDoctor').textContent = data.assigned_doctor;
+            document.getElementById('resRoom').textContent = data.room_number;
+            document.getElementById('triageResult').classList.remove('d-none');
+            document.getElementById('triageForm').reset();
+        } else {
+            alert("Triage Preemption Failed: " + json.error);
+        }
+    } catch (err) {
+        alert("Server error: " + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-lightning-charge-fill me-2"></i> Register Emergency &amp; Preempt Room';
+    }
+}
+</script>
+{% endblock %}

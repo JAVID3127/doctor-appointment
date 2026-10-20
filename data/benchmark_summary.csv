@@ -1,0 +1,4 @@
+Policy Name,Doctor Utilization (%),Doctor Idle (mins/day),Avg Patient Wait (mins),90th Percentile Wait (mins),Clinic Overtime (mins/day),Emergency Wait (mins),Total Attended (30 Days)
+Traditional Fixed (No Overbooking),82.96 ± 3.92,300.73 ± 67.89,11.34,24.99,133.8 ± 32.5,239.17,2824
+Naive Static Overbooking (+25%),96.18 ± 2.1,70.3 ± 37.52,25.6,55.93,201.08 ± 64.74,255.06,3455
+Proposed Smart OPD (ML Overbooking + ESI),93.62 ± 3.25,107.92 ± 53.25,21.07,52.55,109.15 ± 94.1,26.62,3069

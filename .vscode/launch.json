@@ -1,0 +1,33 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "🏥 Run Flask Web Application",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/app.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "FLASK_ENV": "development",
+                "PYTHONUNBUFFERED": "1"
+            }
+        },
+        {
+            "name": "📊 Run 30-Day Benchmark Simulation",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main_demo_week7.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "▶️ Python: Run Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

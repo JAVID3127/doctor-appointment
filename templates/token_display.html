@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waiting Hall Live Digital Token Board - Smart OPD</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css">
+    <style>
+        body {
+            background-color: #0b132b;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            overflow-x: hidden;
+        }
+        .header-bar {
+            background: linear-gradient(90deg, #1c2541 0%, #3a506b 100%);
+            border-bottom: 3px solid #48cae4;
+        }
+        .token-card {
+            background-color: #1c2541;
+            border-radius: 12px;
+            border: 2px solid #3a506b;
+            transition: all 0.3s ease;
+        }
+        .token-card:hover {
+            border-color: #48cae4;
+            transform: translateY(-2px);
+        }
+        .token-badge {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 2.8rem;
+            font-weight: 800;
+            letter-spacing: 2px;
+            color: #5bc0be;
+            text-shadow: 0 0 10px rgba(91, 192, 190, 0.4);
+        }
+        .room-tag {
+            background-color: #48cae4;
+            color: #0b132b;
+            font-weight: 800;
+            font-size: 1.3rem;
+            padding: 4px 16px;
+            border-radius: 6px;
+        }
+        .blink-status {
+            animation: pulse-glow 1.5s infinite;
+        }
+        @keyframes pulse-glow {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+        .ticker {
+            background-color: #111d4a;
+            border-top: 2px solid #ff5722;
+            font-size: 1.1rem;
+        }
+    </style>
+</head>
+<body class="d-flex flex-column min-vh-100">
+
+    <!-- Top Display Header -->
+    <header class="header-bar py-3 px-4 shadow">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-3">
+                <i class="bi bi-hospital fs-1 text-info"></i>
+                <div>
+                    <h2 class="fw-bold mb-0 text-white tracking-wide">CENTRAL OPD WAITING HALL</h2>
+                    <small class="text-info fw-semibold text-uppercase tracking-wider">Automated Token &amp; Consultation Call System</small>
+                </div>
+            </div>
+            <div class="text-end d-flex align-items-center gap-3">
+                <button id="audioToggleBtn" class="btn btn-sm btn-outline-info" onclick="toggleAudio()">
+                    <i class="bi bi-volume-up-fill me-1"></i> Audio: ON
+                </button>
+                <div>
+                    <div id="liveClock" class="fs-2 fw-bold font-monospace text-warning">00:00:00</div>
+                    <div class="badge bg-success-subtle text-success border border-success"><i class="bi bi-broadcast me-1 blink-status"></i> LIVE QUEUE FEED</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Token Grid Container -->
+    <main class="container-fluid px-4 py-4 flex-grow-1">
+        <div id="boardContainer" class="row g-4">
+            <!-- Dynamic tokens injected via JavaScript -->
+            <div class="col-12 text-center py-5">
+                <div class="spinner-border text-info" role="status"></div>
+                <div class="mt-2 text-muted">Connecting to hospital queue server...</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer Emergency Ticker -->
+    <footer class="ticker py-2 px-4 text-center">
+        <span class="text-warning fw-bold"><i class="bi bi-info-circle-fill me-1"></i> NOTICE:</span>
+        <span class="text-white-50 ms-2">Patients are requested to arrive at their assigned room when token is displayed. Emergency walk-ins are prioritized per medical triage severity protocols.</span>
+    </footer>
+
+    <script>
+        let audioEnabled = true;
+        let lastTokensByRoom = {};
+
+        function toggleAudio() {
+            audioEnabled = !audioEnabled;
+            const btn = document.getElementById('audioToggleBtn');
+            btn.innerHTML = audioEnabled 
+                ? '<i class="bi bi-volume-up-fill me-1"></i> Audio: ON' 
+                : '<i class="bi bi-volume-mute-fill me-1"></i> Audio: OFF';
+            btn.className = audioEnabled ? 'btn btn-sm btn-outline-info' : 'btn btn-sm btn-outline-secondary';
+        }
+
+        function announceToken(token, room) {
+            if (!audioEnabled || !('speechSynthesis' in window)) return;
+            try {
+                window.speechSynthesis.cancel();
+                // Phonetic speech format for clear audio in loud waiting halls
+                const message = `Token ${token}. Please proceed to Consultation Room ${room}.`;
+                const utterance = new SpeechSynthesisUtterance(message);
+                utterance.rate = 0.9;
+                utterance.pitch = 1.0;
+                window.speechSynthesis.speak(utterance);
+            } catch (err) {
+                console.warn("Speech synthesis unavailable:", err);
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('liveClock').textContent = now.toLocaleTimeString('en-US', { hour12: false });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        async function fetchTokenBoard() {
+            try {
+                const res = await fetch('/api/queue/token-board');
+                const data = await res.json();
+                renderBoard(data.board);
+            } catch (err) {
+                console.error("Token board sync error:", err);
+            }
+        }
+
+        function renderBoard(rooms) {
+            const container = document.getElementById('boardContainer');
+            if (!rooms || rooms.length === 0) {
+                container.innerHTML = '<div class="col-12 text-center text-muted py-5"><h3>No active OPD rooms currently consulting.</h3></div>';
+                return;
+            }
+
+            // Check if any room has called a new token
+            rooms.forEach(room => {
+                const prev = lastTokensByRoom[room.room_number];
+                if (room.current_token && room.current_token !== "ROOM READY" && prev && prev !== room.current_token) {
+                    announceToken(room.current_token, room.room_number);
+                }
+                lastTokensByRoom[room.room_number] = room.current_token;
+            });
+
+            container.innerHTML = rooms.map(room => `
+                <div class="col-md-6 col-xl-4">
+                    <div class="token-card p-4 h-100 shadow">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="room-tag">${room.room_number}</span>
+                            <span class="badge bg-dark border border-secondary text-light px-3 py-2">
+                                <i class="bi bi-hourglass-split me-1 text-warning"></i> ${room.patients_waiting} Waiting
+                            </span>
+                        </div>
+                        <h4 class="fw-bold mb-1 text-white">${room.doctor_name}</h4>
+                        <div class="text-info small mb-3">${room.specialization}</div>
+                        
+                        <div class="bg-black bg-opacity-50 p-3 rounded text-center my-3 border border-secondary">
+                            <div class="text-uppercase text-secondary small fw-bold mb-1">Current Token in Room</div>
+                            <div class="token-badge">${room.current_token}</div>
+                            <div class="text-light small mt-1">Patient: <strong class="text-warning">${room.current_patient}</strong></div>
+                        </div>
+
+                        <div class="d-flex justify-content-between text-secondary small pt-2 border-top border-secondary">
+                            <span>Estimated Queue Delay:</span>
+                            <span class="text-light fw-bold">${room.estimated_delay_mins} mins</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Poll every 3 seconds for real-time responsiveness
+        fetchTokenBoard();
+        setInterval(fetchTokenBoard, 3000);
+    </script>
+</body>
+</html>

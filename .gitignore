@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Pytest / Testing caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local databases & runtime logs
+*.log
+
+# Operating System specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store

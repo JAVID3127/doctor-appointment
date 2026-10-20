@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+
+{% block title %}Book Outpatient Appointment - Smart OPD{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-primary text-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h4 class="fw-bold mb-0" id="headerTitle"><i class="bi bi-calendar-plus me-2"></i>Patient Outpatient Appointment Booking</h4>
+                <!-- Multi-Lingual Language Selector Pills -->
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-light active fw-bold" id="lang-en" onclick="changeLanguage('en')">English</button>
+                    <button type="button" class="btn btn-outline-light" id="lang-hi" onclick="changeLanguage('hi')">हिंदी</button>
+                    <button type="button" class="btn btn-outline-light" id="lang-ta" onclick="changeLanguage('ta')">தமிழ்</button>
+                </div>
+            </div>
+            <div class="card-body p-4">
+                <!-- In-page Dismissible Alert Banner -->
+                <div id="bookingAlert" class="alert alert-danger alert-dismissible fade show d-none" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <span id="bookingAlertMsg"></span>
+                    <button type="button" class="btn-close" onclick="document.getElementById('bookingAlert').classList.add('d-none')"></button>
+                </div>
+
+                <!-- AI Symptom-to-Specialty Checker Box -->
+                <div class="card bg-light border-primary border-opacity-25 mb-4 shadow-sm">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <h6 class="fw-bold text-primary mb-0">
+                                <i class="bi bi-robot text-primary me-2"></i><span id="aiTriageTitle">AI Symptom Assistant: Don't know which doctor to choose?</span>
+                            </h6>
+                            <span class="badge bg-primary-subtle text-primary border border-primary small">NLP Triage</span>
+                        </div>
+                        <p class="text-muted small mb-2" id="aiTriageSub">Type your chief complaint below (e.g. <em>"chest pain and dizziness"</em> or <em>"knee joint stiffness"</em>) to auto-match the specialty.</p>
+                        <div class="input-group">
+                            <input type="text" id="symptomInput" class="form-control" placeholder="Describe symptoms (e.g. high fever, cough, joint swelling...)">
+                            <button class="btn btn-primary fw-semibold" type="button" onclick="analyzeSymptoms()">
+                                <i class="bi bi-magic me-1"></i> <span id="aiTriageBtn">Auto-Match Specialty</span>
+                            </button>
+                        </div>
+                        <div id="aiTriageResult" class="mt-2 d-none">
+                            <div class="alert alert-info py-2 mb-0 small d-flex justify-content-between align-items-center">
+                                <div><i class="bi bi-check-circle-fill me-1 text-success"></i> <span id="aiTriageMsg"></span></div>
+                                <span class="badge bg-danger" id="aiTriageBadge">Urgency</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <form id="bookingForm" onsubmit="handleBooking(event)">
+                    <!-- Patient Personal Information -->
+                    <h5 class="fw-bold text-secondary mb-3 border-bottom pb-2" id="sec1Title">1. Patient Information</h5>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" id="lblFullName">Full Name *</label>
+                            <input type="text" class="form-control" id="patientName" required minlength="2" placeholder="e.g. Ramesh Kumar">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" id="lblMobile">Mobile Number (10 Digits) *</label>
+                            <input type="tel" class="form-control" id="patientPhone" required pattern="[0-9]{10}" maxlength="10" placeholder="e.g. 9876543210">
+                            <div class="form-text small" id="lblMobileHelp">Standard 10-digit mobile number for token SMS updates.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold" id="lblAge">Age *</label>
+                            <input type="number" class="form-control" id="patientAge" required min="1" max="120" value="35">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold" id="lblGender">Gender *</label>
+                            <select class="form-select" id="patientGender" required>
+                                <option value="Male" id="optMale">Male</option>
+                                <option value="Female" id="optFemale">Female</option>
+                                <option value="Other" id="optOther">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold" id="lblEmail">Email Address (Optional)</label>
+                            <input type="email" class="form-control" id="patientEmail" placeholder="patient@example.com">
+                        </div>
+                    </div>
+
+                    <!-- Department & Doctor Selection -->
+                    <h5 class="fw-bold text-secondary mb-3 border-bottom pb-2" id="sec2Title">2. Department &amp; Specialty Doctor</h5>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" id="lblDept">Department *</label>
+                            <select class="form-select" id="deptSelect" onchange="onDepartmentChange()" required>
+                                <option value="" disabled selected id="optChooseDept">Select Department...</option>
+                                {% for dept in departments %}
+                                <option value="{{ dept.dept_id }}">{{ dept.dept_name }} (Floor {{ dept.floor_number }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" id="lblDoctor">Consulting Doctor *</label>
+                            <select class="form-select" id="doctorSelect" onchange="onDoctorChange()" required disabled>
+                                <option value="" disabled selected id="optChooseDoc">First choose a department...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Available Consultation Interval Slots -->
+                    <h5 class="fw-bold text-secondary mb-3 border-bottom pb-2" id="sec3Title">3. Select Appointment Interval Slot</h5>
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold" id="lblSlots">Available Consultation Slots *</label>
+                        <select class="form-select" id="slotSelect" required disabled>
+                            <option value="" disabled selected id="optChooseSlot">First select a doctor...</option>
+                        </select>
+                        <small class="text-muted" id="lblSlotHelp">Standard slots are allocated via Greedy Interval Partitioning.</small>
+                    </div>
+
+                    <!-- Lead time & notifications -->
+                    <h5 class="fw-bold text-secondary mb-3 border-bottom pb-2" id="sec4Title">4. Scheduling &amp; Notification</h5>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" id="lblLeadDays">Days in Advance (Lead Time)</label>
+                            <input type="number" class="form-control" id="leadDays" min="0" max="30" value="1">
+                            <small class="text-muted" id="lblLeadHelp">Used by ML model to forecast attendance probability.</small>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-center pt-3">
+                            <div class="form-check form-switch fs-5">
+                                <input class="form-check-input" type="checkbox" id="smsOptIn" checked>
+                                <label class="form-check-label fs-6 fw-semibold" for="smsOptIn" id="lblSms">Send SMS Appointment Reminder</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                            <i class="bi bi-check-circle-fill me-2"></i> <span id="btnSubmitText">Confirm &amp; Generate OPD Token</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Confirmation Modal -->
+<div class="modal fade" id="confirmationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-success text-white py-3">
+                <h5 class="modal-title fw-bold"><i class="bi bi-ticket-perforated-fill me-2"></i>Appointment Confirmed!</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center p-4">
+                <div class="text-muted text-uppercase small fw-bold">Issued Consultation Token</div>
+                <div class="display-3 fw-bold text-primary font-monospace my-2" id="modalToken">OPD-000</div>
+                <hr>
+                <div class="text-start">
+                    <p class="mb-1"><strong>Patient:</strong> <span id="modalPatient"></span></p>
+                    <p class="mb-1"><strong>Doctor:</strong> <span id="modalDoctor"></span> (<span id="modalSpec"></span>)</p>
+                    <p class="mb-1"><strong>Room:</strong> <span class="badge bg-primary" id="modalRoom"></span></p>
+                    <p class="mb-1"><strong>Time Slot:</strong> <span id="modalTime"></span></p>
+                    <p class="mb-1"><strong>Predicted No-Show Risk:</strong> <span class="badge bg-secondary" id="modalRisk"></span></p>
+                    <div id="modalOverbookNotice" class="alert alert-warning py-2 mt-2 d-none">
+                        <i class="bi bi-info-circle-fill me-1"></i> <strong>Smart Overbooked:</strong> You hold a secondary reserved slot optimized for doctor utilization.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-dark" onclick="window.print()">
+                    <i class="bi bi-printer-fill me-1"></i> Print Token Slip
+                </button>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('patient_token_tracker') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-search me-1"></i> Track Token
+                    </a>
+                    <a href="{{ url_for('token_display') }}" target="_blank" class="btn btn-primary">
+                        <i class="bi bi-tv me-1"></i> Token Board
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ==========================================
+// Multi-Lingual Translation Dictionary
+// ==========================================
+const translations = {
+    en: {
+        headerTitle: '<i class="bi bi-calendar-plus me-2"></i>Patient Outpatient Appointment Booking',
+        aiTriageTitle: "AI Symptom Assistant: Don't know which doctor to choose?",
+        aiTriageSub: 'Type your chief complaint below (e.g. "chest pain and dizziness" or "knee joint stiffness") to auto-match the specialty.',
+        aiTriageBtn: 'Auto-Match Specialty',
+        sec1Title: '1. Patient Information',
+        lblFullName: 'Full Name *',
+        lblMobile: 'Mobile Number (10 Digits) *',
+        lblMobileHelp: 'Standard 10-digit mobile number for token SMS updates.',
+        lblAge: 'Age *',
+        lblGender: 'Gender *',
+        optMale: 'Male',
+        optFemale: 'Female',
+        optOther: 'Other',
+        lblEmail: 'Email Address (Optional)',
+        sec2Title: '2. Department & Specialty Doctor',
+        lblDept: 'Department *',
+        lblDoctor: 'Consulting Doctor *',
+        sec3Title: '3. Select Appointment Interval Slot',
+        lblSlots: 'Available Consultation Slots *',
+        lblSlotHelp: 'Standard slots are allocated via Greedy Interval Partitioning.',
+        sec4Title: '4. Scheduling & Notification',
+        lblLeadDays: 'Days in Advance (Lead Time)',
+        lblLeadHelp: 'Used by ML model to forecast attendance probability.',
+        lblSms: 'Send SMS Appointment Reminder',
+        btnSubmitText: 'Confirm & Generate OPD Token'
+    },
+    hi: {
+        headerTitle: '<i class="bi bi-calendar-plus me-2"></i>रोगी ओपीडी अपॉइंटमेंट बुकिंग',
+        aiTriageTitle: 'एआई लक्षण सहायक: डॉक्टर चुनने में असमर्थ हैं?',
+        aiTriageSub: 'नीचे अपने लक्षण लिखें (जैसे "सीने में दर्द" या "घुटने का दर्द") ताकि सही विभाग चुना जा सके।',
+        aiTriageBtn: 'विशेषज्ञ खोजें',
+        sec1Title: '१. रोगी का विवरण',
+        lblFullName: 'पूरा नाम *',
+        lblMobile: 'मोबाइल नंबर (१० अंक) *',
+        lblMobileHelp: 'टोकन एसएमएस सूचना के लिए १० अंकों का वैध नंबर।',
+        lblAge: 'आयु *',
+        lblGender: 'लिंग *',
+        optMale: 'पुरुष',
+        optFemale: 'महिला',
+        optOther: 'अन्य',
+        lblEmail: 'ईमेल पता (वैकल्पिक)',
+        sec2Title: '२. विभाग एवं विशेषज्ञ चिकित्सक',
+        lblDept: 'विभाग चुनें *',
+        lblDoctor: 'परामर्श चिकित्सक *',
+        sec3Title: '३. परामर्श समय स्लॉट चुनें',
+        lblSlots: 'उपलब्ध समय स्लॉट *',
+        lblSlotHelp: 'समय स्लॉट स्वचालित शेड्यूलिंग द्वारा आवंटित किए जाते हैं।',
+        sec4Title: '४. शेड्यूलिंग एवं एसएमएस सूचना',
+        lblLeadDays: 'अग्रिम दिन (लीड टाइम)',
+        lblLeadHelp: 'उपस्थिति संभावना का आकलन करने के लिए प्रयुक्त।',
+        lblSms: 'एसएमएस रिमाइंडर भेजें',
+        btnSubmitText: 'पुष्टि करें और ओपीडी टोकन बनाएं'
+    },
+    ta: {
+        headerTitle: '<i class="bi bi-calendar-plus me-2"></i>நோயாளி புறநோயாளி முன்பதிவு',
+        aiTriageTitle: 'AI அறிகுறி உதவியாளர்: மருத்துவரை தேர்வு செய்வதில் குழப்பமா?',
+        aiTriageSub: 'உங்கள் அறிகுறிகளை கீழே உள்ளிடவும் (எ.கா. "மார்பு வலி" அல்லது "மூட்டு வலி").',
+        aiTriageBtn: 'பிரிவை கண்டறி',
+        sec1Title: '1. நோயாளி விவரங்கள்',
+        lblFullName: 'முழு பெயர் *',
+        lblMobile: 'கைபேசி எண் (10 இலக்கங்கள்) *',
+        lblMobileHelp: 'எஸ்எம்எஸ் புதுப்பிப்புகளுக்கான 10 இலக்க மொபைல் எண்.',
+        lblAge: 'வயது *',
+        lblGender: 'பாலினம் *',
+        optMale: 'ஆண்',
+        optFemale: 'பெண்',
+        optOther: 'மற்றவை',
+        lblEmail: 'மின்னஞ்சல் முகவரி (விருப்பத்திற்குரியது)',
+        sec2Title: '2. மருத்துவத்துறை மற்றும் மருத்துவர்',
+        lblDept: 'துறையை தேர்வு செய்க *',
+        lblDoctor: 'மருத்துவர் *',
+        sec3Title: '3. முன்பதிவு நேரத்தைத் தேர்வுசெய்க',
+        lblSlots: 'கிடைக்கும் நேரங்கள் *',
+        lblSlotHelp: 'முன்பதிவு நேரங்கள் முறையாக ஒதுக்கப்படுகின்றன.',
+        sec4Title: '4. நினைவூட்டல் அமைப்புகள்',
+        lblLeadDays: 'முன்கூட்டிய நாட்கள்',
+        lblLeadHelp: 'முன்பதிவு நாட்களின் அடிப்படையில் பகுப்பாய்வு.',
+        lblSms: 'எஸ்எம்எஸ் நினைவூட்டல் அனுப்புக',
+        btnSubmitText: 'டோக்கனை பெறவும்'
+    }
+};
+
+function changeLanguage(lang) {
+    const dict = translations[lang] || translations.en;
+    document.querySelectorAll('[id^="lang-"]').forEach(btn => btn.className = 'btn btn-outline-light');
+    document.getElementById(`lang-${lang}`).className = 'btn btn-light active fw-bold';
+
+    for (const [key, val] of Object.entries(dict)) {
+        const el = document.getElementById(key);
+        if (el) {
+            if (val.includes('<')) el.innerHTML = val;
+            else el.textContent = val;
+        }
+    }
+}
+
+// ==========================================
+// AI Symptom-to-Specialty NLP Assistant
+// ==========================================
+async function analyzeSymptoms() {
+    const text = document.getElementById('symptomInput').value.trim();
+    if (!text) {
+        alert("Please describe your symptoms first (e.g. 'chest pain', 'knee joint stiffness').");
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/ai/symptom-triage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symptoms: text })
+        });
+        const json = await res.json();
+        if (json.success) {
+            const data = json.data;
+            const resBox = document.getElementById('aiTriageResult');
+            const msgSpan = document.getElementById('aiTriageMsg');
+            const badge = document.getElementById('aiTriageBadge');
+
+            resBox.classList.remove('d-none');
+            msgSpan.innerHTML = `<strong>Matched:</strong> ${data.recommended_department} (Floor ${data.floor_number}) &bull; ${data.clinical_reason}`;
+            badge.textContent = data.urgency_label;
+            badge.className = data.is_emergency_preempt ? 'badge bg-danger fs-6' : 'badge bg-primary';
+
+            // Auto-select department in dropdown
+            const deptSelect = document.getElementById('deptSelect');
+            deptSelect.value = data.dept_id;
+            await onDepartmentChange();
+
+            // Auto-select first recommended doctor
+            if (data.suggested_doctors && data.suggested_doctors.length > 0) {
+                const docSelect = document.getElementById('doctorSelect');
+                docSelect.value = data.suggested_doctors[0].doctor_id;
+                await onDoctorChange();
+            }
+        }
+    } catch (err) {
+        console.error("AI Triage error:", err);
+    }
+}
+
+function showError(msg) {
+    const alertBox = document.getElementById('bookingAlert');
+    document.getElementById('bookingAlertMsg').textContent = msg;
+    alertBox.classList.remove('d-none');
+    alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function onDepartmentChange() {
+    const deptId = document.getElementById('deptSelect').value;
+    const docSelect = document.getElementById('doctorSelect');
+    const slotSelect = document.getElementById('slotSelect');
+    
+    docSelect.disabled = true;
+    slotSelect.disabled = true;
+    docSelect.innerHTML = '<option value="" disabled selected>Loading doctors...</option>';
+
+    try {
+        const res = await fetch(`/api/doctors?dept_id=${deptId}`);
+        const doctors = await res.json();
+        
+        docSelect.innerHTML = '<option value="" disabled selected>Choose Doctor...</option>';
+        doctors.forEach(doc => {
+            if (doc.is_available) {
+                docSelect.innerHTML += `<option value="${doc.doctor_id}">${doc.name} (${doc.room_number})</option>`;
+            }
+        });
+        docSelect.disabled = false;
+    } catch (e) {
+        showError("Failed to load doctors: " + e.message);
+    }
+}
+
+async function onDoctorChange() {
+    const docId = document.getElementById('doctorSelect').value;
+    const slotSelect = document.getElementById('slotSelect');
+
+    slotSelect.disabled = true;
+    slotSelect.innerHTML = '<option value="" disabled selected>Loading available slots...</option>';
+
+    try {
+        const res = await fetch(`/api/doctors/${docId}/slots`);
+        const slots = await res.json();
+
+        slotSelect.innerHTML = '<option value="" disabled selected>Choose Time Slot...</option>';
+        if (slots.length === 0) {
+            slotSelect.innerHTML = '<option value="" disabled>No slots available today</option>';
+            return;
+        }
+
+        slots.forEach(slot => {
+            const label = `${slot.start_time} - ${slot.end_time}` + (slot.is_booked ? ' (Overbook Option)' : ' (Primary Open)');
+            slotSelect.innerHTML += `<option value="${slot.slot_id}">${label}</option>`;
+        });
+        slotSelect.disabled = false;
+    } catch (e) {
+        showError("Failed to load slots: " + e.message);
+    }
+}
+
+async function handleBooking(e) {
+    e.preventDefault();
+    const alertBox = document.getElementById('bookingAlert');
+    alertBox.classList.add('d-none');
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Booking...';
+
+    const rawPhone = document.getElementById('patientPhone').value.trim();
+    const cleanPhone = rawPhone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+        showError("Please enter a valid 10-digit mobile number (e.g. 9876543210).");
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i> Confirm &amp; Generate OPD Token';
+        return;
+    }
+
+    const payload = {
+        name: document.getElementById('patientName').value.trim(),
+        phone: cleanPhone,
+        email: document.getElementById('patientEmail').value.trim() || null,
+        age: parseInt(document.getElementById('patientAge').value),
+        gender: document.getElementById('patientGender').value,
+        doctor_id: parseInt(document.getElementById('doctorSelect').value),
+        slot_id: parseInt(document.getElementById('slotSelect').value),
+        lead_days: parseInt(document.getElementById('leadDays').value),
+        sms_sent: document.getElementById('smsOptIn').checked
+    };
+
+    try {
+        const res = await fetch('/api/appointments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+
+        if (json.success) {
+            const data = json.data;
+            document.getElementById('modalToken').textContent = data.token;
+            document.getElementById('modalPatient').textContent = data.patient_name;
+            document.getElementById('modalDoctor').textContent = data.doctor_name;
+            document.getElementById('modalSpec').textContent = data.specialization;
+            document.getElementById('modalRoom').textContent = data.room_number;
+            document.getElementById('modalTime').textContent = data.slot_time;
+            document.getElementById('modalRisk').textContent = `${(data.predicted_no_show_prob * 100).toFixed(1)}%`;
+
+            const obNotice = document.getElementById('modalOverbookNotice');
+            if (data.is_smart_overbooked) {
+                obNotice.classList.remove('d-none');
+            } else {
+                obNotice.classList.add('d-none');
+            }
+
+            const modal = new bootstrap.Modal(document.getElementById('confirmationModal'));
+            modal.show();
+            document.getElementById('bookingForm').reset();
+        } else {
+            showError("Booking Failed: " + (json.error || "Unknown error"));
+        }
+    } catch (err) {
+        showError("Error connecting to server: " + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i> Confirm &amp; Generate OPD Token';
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Clinical Staff & Doctor Login - Smart OPD{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center py-4">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-primary text-white py-3 text-center">
+                <h4 class="fw-bold mb-1"><i class="bi bi-shield-lock-fill me-2"></i>Hospital Staff Portal</h4>
+                <p class="small mb-0 opacity-75">Secure access for Doctors, Receptionists & Administrators</p>
+            </div>
+            <div class="card-body p-4">
+                {% if error %}
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endif %}
+
+                <form method="POST" action="{{ url_for('login') }}">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Username / Role ID</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
+                            <input type="text" name="username" id="loginUsername" class="form-control" required placeholder="e.g. admin or doctor1">
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-key-fill"></i></span>
+                            <input type="password" name="password" id="loginPassword" class="form-control" required placeholder="Enter password">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+                        <i class="bi bi-box-arrow-in-right me-1"></i> Sign In to OPD Console
+                    </button>
+                </form>
+
+                <hr class="my-4">
+
+                <!-- One-click Demo Credentials Helper -->
+                <div class="bg-light p-3 rounded-3 border">
+                    <div class="small fw-bold text-uppercase text-muted mb-2">
+                        <i class="bi bi-lightning-charge-fill text-warning me-1"></i> Quick Demo Logins (Click to autofill)
+                    </div>
+                    <div class="d-flex flex-column gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary text-start" onclick="fillCreds('admin', 'admin123')">
+                            <strong>Administrator:</strong> <code>admin</code> / <code>admin123</code> (Full OPD Command)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-success text-start" onclick="fillCreds('doctor1', 'doc123')">
+                            <strong>Dr. Rajesh Sharma:</strong> <code>doctor1</code> / <code>doc123</code> (Room OPD-101)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-info text-start" onclick="fillCreds('doctor3', 'doc123')">
+                            <strong>Dr. Vikram Patel:</strong> <code>doctor3</code> / <code>doc123</code> (Cardiology OPD-201)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function fillCreds(u, p) {
+    document.getElementById('loginUsername').value = u;
+    document.getElementById('loginPassword').value = p;
+}
+</script>
+{% endblock %}

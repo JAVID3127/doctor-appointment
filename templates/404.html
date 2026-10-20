@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Page Not Found - Smart OPD{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center py-5">
+    <div class="col-md-6 text-center">
+        <div class="card shadow-sm border-0 p-5">
+            <div class="display-1 text-primary mb-3">
+                <i class="bi bi-hospital"></i> 404
+            </div>
+            <h3 class="fw-bold mb-2">Resource Not Found</h3>
+            <p class="text-muted mb-4">{{ message or "The page, doctor room, or appointment you are looking for does not exist or has been relocated." }}</p>
+            <div class="d-flex justify-content-center gap-2">
+                <a href="{{ url_for('index') }}" class="btn btn-primary">
+                    <i class="bi bi-house-door-fill me-1"></i> Central Dashboard
+                </a>
+                <a href="{{ url_for('patient_booking') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-calendar-plus me-1"></i> Book Appointment
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

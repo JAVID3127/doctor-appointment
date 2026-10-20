@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Track Live Token & Queue Position - Smart OPD{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-primary text-white py-3">
+                <h4 class="fw-bold mb-0"><i class="bi bi-search me-2"></i>Live Patient Token &amp; Queue Tracker</h4>
+                <p class="small mb-0 opacity-75">Check your current waiting status, room allocation, and estimated doctor consultation time.</p>
+            </div>
+            <div class="card-body p-4">
+                <form id="trackForm" onsubmit="handleTrack(event)">
+                    <div class="input-group input-group-lg mb-3">
+                        <span class="input-group-text bg-white"><i class="bi bi-ticket-perforated-fill text-primary"></i></span>
+                        <input type="text" id="trackQuery" class="form-control" required 
+                               placeholder="Enter 10-Digit Mobile Number OR Token (e.g. 9876543201 or GENE-001)">
+                        <button type="submit" id="trackBtn" class="btn btn-primary px-4 fw-bold">
+                            <i class="bi bi-arrow-right-circle me-1"></i> Track Status
+                        </button>
+                    </div>
+                </form>
+
+                <div id="trackerAlert" class="alert alert-danger d-none" role="alert">
+                    <i class="bi bi-info-circle-fill me-2"></i><span id="trackerAlertMsg"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Container -->
+        <div id="resultsContainer"></div>
+    </div>
+</div>
+
+<script>
+async function handleTrack(e) {
+    e.preventDefault();
+    const query = document.getElementById('trackQuery').value.trim();
+    if (!query) return;
+
+    const btn = document.getElementById('trackBtn');
+    const alertBox = document.getElementById('trackerAlert');
+    const resultsContainer = document.getElementById('resultsContainer');
+
+    alertBox.classList.add('d-none');
+    resultsContainer.innerHTML = '';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Searching...';
+
+    try {
+        const res = await fetch(`/api/queue/track?query=${encodeURIComponent(query)}`);
+        const json = await res.json();
+
+        if (json.success && json.results.length > 0) {
+            renderResults(json.results);
+        } else {
+            alertBox.classList.remove('d-none');
+            document.getElementById('trackerAlertMsg').textContent = 
+                "No matching active appointments found for '" + query + "'. Please verify your mobile number or token ID.";
+        }
+    } catch (err) {
+        alertBox.classList.remove('d-none');
+        document.getElementById('trackerAlertMsg').textContent = "Failed to connect to server: " + err.message;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-arrow-right-circle me-1"></i> Track Status';
+    }
+}
+
+function renderResults(records) {
+    const container = document.getElementById('resultsContainer');
+    container.innerHTML = records.map(r => {
+        let badgeColor = 'bg-secondary';
+        let statusText = r.status;
+        let callAlert = '';
+
+        if (r.status === 'IN_CONSULTATION') {
+            badgeColor = 'bg-success';
+            statusText = 'NOW CONSULTING (PLEASE ENTER ROOM)';
+            callAlert = `<div class="alert alert-success fw-bold blink-text mb-3">
+                <i class="bi bi-megaphone-fill me-2"></i>YOUR TOKEN IS CALLED! Proceed to Room ${r.room_number} immediately.
+            </div>`;
+        } else if (r.status === 'CHECKED_IN') {
+            badgeColor = 'bg-primary';
+            statusText = 'CHECKED IN (WAITING IN HALL)';
+        } else if (r.status === 'COMPLETED') {
+            badgeColor = 'bg-dark';
+            statusText = 'CONSULTATION COMPLETED';
+        } else if (r.status === 'CANCELLED') {
+            badgeColor = 'bg-danger';
+            statusText = 'CANCELLED';
+        }
+
+        return `
+        <div class="card shadow-sm border-0 mb-3 border-start border-primary border-5">
+            <div class="card-body p-4">
+                ${callAlert}
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                    <div>
+                        <div class="display-6 fw-bold text-primary font-monospace">${r.token}</div>
+                        <h5 class="fw-bold mb-0">${r.patient_name}</h5>
+                        <div class="text-muted small">Registered Mobile: ${r.patient_phone}</div>
+                    </div>
+                    <div>
+                        <span class="badge ${badgeColor} fs-6 px-3 py-2">${statusText}</span>
+                        ${r.is_overbooked ? '<span class="badge bg-warning text-dark fs-6 ms-1 px-3 py-2">Overbook Buffer</span>' : ''}
+                    </div>
+                </div>
+
+                <div class="row g-3 py-2 border-top border-bottom my-2 bg-light rounded">
+                    <div class="col-sm-4 text-center">
+                        <div class="small text-muted">Consulting Doctor</div>
+                        <div class="fw-bold">${r.doctor_name}</div>
+                        <div class="small text-secondary">${r.specialization}</div>
+                    </div>
+                    <div class="col-sm-4 text-center border-start border-end">
+                        <div class="small text-muted">OPD Room</div>
+                        <div class="fw-bold fs-4 text-danger">${r.room_number}</div>
+                        <div class="small text-secondary">Scheduled: ${r.slot_time}</div>
+                    </div>
+                    <div class="col-sm-4 text-center">
+                        <div class="small text-muted">Estimated Wait</div>
+                        <div class="fw-bold fs-4 text-primary">${r.estimated_wait_mins} mins</div>
+                        <div class="small text-secondary">${r.ahead_count} patient(s) ahead</div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3 text-muted small">
+                    <div><i class="bi bi-clock me-1"></i> Keep checking this page or look at the waiting hall display.</div>
+                    <a href="/display" target="_blank" class="btn btn-sm btn-outline-dark">
+                        <i class="bi bi-tv me-1"></i> Open Waiting Hall Display
+                    </a>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+</script>
+
+<style>
+.blink-text {
+    animation: blink-anim 1.5s infinite;
+}
+@keyframes blink-anim {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+</style>
+{% endblock %}

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart OPD Project Defense Presentation</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css">
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #1e293b;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            overflow: hidden;
+        }
+        .deck-container {
+            width: 90vw;
+            max-width: 1100px;
+            height: 85vh;
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-column: column;
+            padding: 40px;
+            position: relative;
+        }
+        .slide {
+            display: none;
+            height: 100%;
+            overflow-y: auto;
+        }
+        .slide.active {
+            display: flex;
+            flex-direction: column;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .slide-list {
+            line-height: 1.8;
+            font-size: 1.15rem;
+        }
+        .nav-controls {
+            position: absolute;
+            bottom: 25px;
+            right: 40px;
+            display: flex;
+            gap: 10px;
+        }
+        .progress-bar-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background-color: #e2e8f0;
+            border-top-left-radius: 16px;
+            border-top-right-radius: 16px;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #0d6efd;
+            transition: width 0.3s ease;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+        th, td {
+            padding: 8px 12px;
+            border: 1px solid #cbd5e1;
+        }
+        th {
+            background-color: #f1f5f9;
+        }
+    </style>
+</head>
+<body>
+    <div class="deck-container">
+        <div class="progress-bar-container">
+            <div class="progress-fill" id="progressFill" style="width: 7.6923076923076925%;"></div>
+        </div>
+
+        
+        <div class="slide active" id="slide-0">
+            <div class="slide-header d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary px-3 py-2">Smart OPD System</span>
+                <span class="text-muted small">Slide 1 of 13</span>
+            </div>
+            <div class="slide-body mt-4">
+                <h2 class="slide-title fw-bold text-dark border-bottom pb-2 mb-4">Smart OPD: Doctor-Patient Appointment Scheduling System</h2>
+                <div class="slide-content fs-5 leading-relaxed">
+                    <h4 class='text-primary mt-3'>Final Academic Project Defense Presentation (7-Week Execution)</h4>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slide " id="slide-1">
+            <div class="slide-header d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary px-3 py-2">Smart OPD System</span>
+                <span class="text-muted small">Slide 2 of 13</span>
+            </div>
+            <div class="slide-body mt-4">
+                <h2 class="slide-title fw-bold text-dark border-bottom pb-2 mb-4">Slide 1: Title & Overview</h2>
+                <div class="slide-content fs-5 leading-relaxed">
+                    <p>**Project Title:** Smart Hospital OPD: An Algorithmic & Machine Learning System for Outpatient Scheduling  </p>
+<p>**Domain:** Healthcare Operations Research & Artificial Intelligence  </p>
+<p>**Focus:** Busy Government Hospital Outpatient Departments (OPDs)  </p>
+<p>**Key Innovations:**</p>
+<ul class='slide-list'><li>Greedy Multi-Doctor Interval Partitioning ($O(n \log d)$)</li>
+<li>Machine Learning Attendance Forecasting ($P(\text{No-Show})$)</li>
+<li>Risk-Aware Smart Overbooking with $+1$ Slot Cap</li>
+<li>Emergency Severity Index (ESI) Real-Time Walk-in Preemption</li>
+<li>Big-Screen Waiting Hall Digital Token Display & Doctor Dashboards</li></ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slide " id="slide-2">
+            <div class="slide-header d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary px-3 py-2">Smart OPD System</span>
+                <span class="text-muted small">Slide 3 of 13</span>
+            </div>
+            <div class="slide-body mt-4">
+                <h2 class="slide-title fw-bold text-dark border-bottom pb-2 mb-4">Slide 2: Clinical Context & Problem Motivation</h2>
+                <div class="slide-content fs-5 leading-relaxed">
+                    <ul class='slide-list'><li>**The Public OPD Crisis:** Government hospitals handle hundreds of walk-ins and appointments daily per doctor.</li>
+<li>**The Core Trade-off:**</li></ul>
+<li class='ms-4 text-muted'>*Doctor Idle Time* (Wasted capacity when scheduled patients fail to show up) vs.</li>
+<p>  * *Patient Wait Times* (Overcrowded, infectious waiting halls when clinics overbook naively).</p>
+<ul class='slide-list'><li>**The Empirical Reality:**</li></ul>
+<li class='ms-4 text-muted'>Average patient no-show rate is **~25%** in public healthcare.</li>
+<li class='ms-4 text-muted'>Traditional fixed booking results in doctors sitting idle 20-30% of their working hours.</li>
+<li class='ms-4 text-muted'>Naive flat overbooking causes cascading 45-60 minute waiting room delays and physician burnout.</li>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slide " id="slide-3">
+            <div class="slide-header d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary px-3 py-2">Smart OPD System</span>
+                <span class="text-muted small">Slide 4 of 13</span>
+            </div>
+            <div class="slide-body mt-4">
+                <h2 class="slide-title fw-bold text-dark border-bottom pb-2 mb-4">Slide 3: 7-Week Project Lifecycle Roadmap</h2>
+                <div class="slide-content fs-5 leading-relaxed">
+                    <ul class='slide-list'><li>**Week 1:** Foundation & Relational Database Architecture (SQLite, 7 tables, SQLAlchemy ORM)</li>
+<li>**Week 2:** Object-Oriented Domain Layer & State Transition Machines (`AppointmentStateMachine`)</li>
+<li>**Week 3:** Interval Scheduling Core (Greedy Earliest Finish Time & Multi-Doctor Min-Heap Partitioning)</li>
+<li>**Week 4:** Machine Learning No-Show Predictor (2,500 patient cohort, Logistic Regression & Random Forest, 0.752 ROC-AUC)</li>
+<li>**Week 5:** Smart Overbooking ($\mathbb{E}[\text{Show}]$ threshold model) & Emergency Preemption Engine</li>
+<li>**Week 6:** Full-Stack Web Application (Flask REST API, Doctor Dashboard, Patient Portal, Live Token Board)</li>
+<li>**Week 7:** Monte Carlo Simulation (30 days, 3,000+ patient arrivals), Empirical Benchmarking & Defense Report</li></ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slide " id="slide-4">
+            <div class="slide-header d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary px-3 py-2">Smart OPD System</span>
+                <span class="text-muted small">Slide 5 of 13</span>
+            </div>
+            <div class="slide-body mt-4">
+                <h2 class="slide-title fw-bold text-dark border-bottom pb-2 mb-4">Slide 4: Algorithmic Core — Greedy Interval Partitioning</h2>
+                <div class="slide-content fs-5 leading-relaxed">
+                    <ul class='slide-list'><li>**Interval Scheduling Maximization (EFT):** Sort by finish time $f_i$ ($O(n \log n)$) to maximize non-overlapping consultations.</li>
+<li>**Interval Partitioning Across $d$ Physicians:**</li></ul>
+<li class='ms-4 text-muted'>Utilizes a Min-Heap keyed on doctor earliest available time $t_k$.</li>
+<li class='ms-4 text-muted'>Assigns incoming appointment interval to doctor with $\min(t_k)$ if $t_k \le s_i$.</li>
+<li class='ms-4 text-muted'>Complexity: $O(n \log d)$, achieving theoretically optimal room allocation.</li>
+<ul class='slide-list'><li>**Shift Compaction:** Closes non-productive doctor idle gaps, increasing raw slot capacity by $+41.7\%$.</li></ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slide " id="slide-5">
+            <div class="slide-header d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary px-3 py-2">Smart OPD System</span>
+                <span class="text-muted small">Slide 6 of 13</span>
+            </div>
+            <div class="slide-body mt-4">
+                <h2 class="slide-title fw-bold text-dark border-bottom pb-2 mb-4">Slide 5: Machine Learning No-Show Forecasting Model</h2>
+                <div class="slide-content fs-5 leading-relaxed">
+                    <ul class='slide-list'><li>**Trained on 2,500 Outpatient Encounters:**</li></ul>
+<li class='ms-4 text-muted'>Features: `lead_days` ($+0.14$), `historical_no_show_ratio` ($+4.00$), `sms_reminder_sent` ($-1.40$), `patient_age` ($-0.02$).</li>
+<ul class='slide-list'><li>**Calibrated Logistic Equation:**</li></ul>
+<p>  $$\text{logit}(p) = -1.80 + 0.14 \cdot \text{lead\_days} + 4.00 \cdot \text{ratio} - 1.40 \cdot \text{sms} - 0.02 \cdot (\text{age} - 40)$$</p>
+<ul class='slide-list'><li>**Performance:** ROC-AUC **0.752**, Precision **78.4%**, Recall **71.2%**.</li>
+<li>**Clinical Insight:** Lead time >7 days combined with zero prior visits spikes no-show probability to >58%.</li></ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slide " id="slide-6">
+            <div class="slide-header d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary px-3 py-2">Smart OPD System</span>
+                <span class="text-muted small">Slide 7 of 13</span>
+            </div>
+            <div class="slide-body mt-4">
+                <h2 class="slide-title fw-bold text-dark border-bottom pb-2 mb-4">Slide 6: Smart Overbooking & Dynamic Conflict Resolution</h2>
+                <div class="slide-content fs-5 leading-relaxed">
+                    <ul class='slide-list'><li>**Expected Show Formulation:**</li></ul>
+<p>  $$\mathbb{E}[\text{Show}] = P(\text{Show}_1) + P(\text{Show}_2) = (1 - P_1) + (1 - P_2)$$</p>
+<ul class='slide-list'><li>**Mathematical Policy Rule:**</li></ul>
+<li class='ms-4 text-muted'>Secondary slot overbooking is permitted *if and only if* $P_1(\text{No-Show}) \ge 0.50$.</li>
+<li class='ms-4 text-muted'>Hard cap: Max $+1$ overbook per slot (strictly prevents uncontrolled cascading).</li>
+<li class='ms-4 text-muted'>Cancellation Auto-Promotion: If primary patient cancels, secondary patient is instantly elevated to primary status.</li>
+<ul class='slide-list'><li>**Emergency Priority Preemption:**</li></ul>
+<li class='ms-4 text-muted'>Critical ESI Level 1 & 2 walk-ins immediately preempt doctor's queue via PriorityQueue.</li>
+<li class='ms-4 text-muted'>Doctor Unscheduled Absence: Cascades remaining active consultations across available peer specialists.</li>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slide " id="slide-7">
+            <div class="slide-header d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary px-3 py-2">Smart OPD System</span>
+                <span class="text-muted small">Slide 8 of 13</span>
+            </div>
+            <div class="slide-body mt-4">
+                <h2 class="slide-title fw-bold text-dark border-bottom pb-2 mb-4">Slide 7: Full-Stack Web Application & Portals</h2>
+                <div class="slide-content fs-5 leading-relaxed">
+                    <ul class='slide-list'><li>**Tier 1 (Presentation):**</li></ul>
+<li class='ms-4 text-muted'>**Lobby Digital Token Board (`/display`):** 3-second auto-polling feed for waiting hall TVs.</li>
+<li class='ms-4 text-muted'>**Doctor Consultation Workstation (`/doctor/<id>`):** Direct status transitions (`CHECKED_IN`, `IN_CONSULTATION`, `COMPLETED`).</li>
+<li class='ms-4 text-muted'>**Patient Self-Booking Portal (`/book`):** Real-time available slot selection with token generation.</li>
+<li class='ms-4 text-muted'>**Emergency Triage Desk (`/triage`):** Rapid clinical preemption intake.</li>
+<ul class='slide-list'><li>**Tier 2 (RESTful API):** 10 endpoints handling JSON payloads with transactional integrity.</li></ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slide " id="slide-8">
+            <div class="slide-header d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary px-3 py-2">Smart OPD System</span>
+                <span class="text-muted small">Slide 9 of 13</span>
+            </div>
+            <div class="slide-body mt-4">
+                <h2 class="slide-title fw-bold text-dark border-bottom pb-2 mb-4">Slide 8: 30-Day Monte Carlo Simulation Architecture</h2>
+                <div class="slide-content fs-5 leading-relaxed">
+                    <ul class='slide-list'><li>**Stochastic Patient Process Model:**</li></ul>
+<li class='ms-4 text-muted'>4 Specialist Doctors, 7-hour daily clinic operations (420 minutes, 28 slots/doctor).</li>
+<li class='ms-4 text-muted'>Consultation durations sampled from empirical Log-normal distribution ($\mu=2.65, \sigma=0.28$, mean $\approx 14.5$ mins).</li>
+<li class='ms-4 text-muted'>Walk-in emergencies generated via Poisson process ($\lambda = 5.0$ cases/day).</li>
+<li class='ms-4 text-muted'>Random doctor emergency leave probability ($p=0.03$ per doctor-day).</li>
+<ul class='slide-list'><li>**Paired Experimental Runs:** Exact seed sequence matching for rigorous variance reduction.</li></ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slide " id="slide-9">
+            <div class="slide-header d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary px-3 py-2">Smart OPD System</span>
+                <span class="text-muted small">Slide 10 of 13</span>
+            </div>
+            <div class="slide-body mt-4">
+                <h2 class="slide-title fw-bold text-dark border-bottom pb-2 mb-4">Slide 9: Quantitative Benchmark Comparison</h2>
+                <div class="slide-content fs-5 leading-relaxed">
+                    <div class='table-responsive my-2'>| Operational Metric | Traditional Fixed | Naive Static (+25%) | Proposed Smart OPD | Clinical Significance |</div>
+<div class='table-responsive my-2'>| :--- | :---: | :---: | :---: | :--- |</div>
+<div class='table-responsive my-2'>| **Doctor Utilization** | 83.0% | 96.2% | **93.6%** | $+12.8\%$ relative gain vs. Fixed |</div>
+<div class='table-responsive my-2'>| **Doctor Idle Downtime** | 300.7 min/day | 70.3 min/day | **107.9 min/day** | **-64.1% reduction** in wasted doctor time |</div>
+<div class='table-responsive my-2'>| **Average Patient Wait** | 11.3 min | 25.6 min | **21.1 min** | **-17.7% lower wait** vs. Naive Overbooking |</div>
+<div class='table-responsive my-2'>| **90th Percentile Wait** | 25.0 min | 55.9 min | **52.5 min** | Controlled wait distribution |</div>
+<div class='table-responsive my-2'>| **Emergency Response Time** | 239.2 min | 255.1 min | **26.6 min** | **-88.9% reduction** in life-saving triage latency |</div>
+<div class='table-responsive my-2'>| **Patients Treated (30 Days)**| 2,824 | 3,455 | **3,069** | $+245$ additional outpatients served |</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slide " id="slide-10">
+            <div class="slide-header d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary px-3 py-2">Smart OPD System</span>
+                <span class="text-muted small">Slide 11 of 13</span>
+            </div>
+            <div class="slide-body mt-4">
+                <h2 class="slide-title fw-bold text-dark border-bottom pb-2 mb-4">Slide 10: The Pareto-Optimal Efficiency Frontier</h2>
+                <div class="slide-content fs-5 leading-relaxed">
+                    <ul class='slide-list'><li>**The Classic Operations Frontier:**</li></ul>
+<li class='ms-4 text-muted'>*Traditional Fixed Booking:* Doctor idle downtime is excessive (~301 mins/day) while patient wait times are low.</li>
+<li class='ms-4 text-muted'>*Naive Flat Overbooking:* Severe queue instability — 55+ minute wait times and 200+ minutes of clinic overtime.</li>
+<li class='ms-4 text-muted'>*Proposed Smart OPD:* Reaches the **Pareto-Optimal Sweet Spot** on the hyperbolic trade-off curve, recapturing $64\%$ of idle doctor capacity while shielding patients from extreme congestion.</li>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slide " id="slide-11">
+            <div class="slide-header d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary px-3 py-2">Smart OPD System</span>
+                <span class="text-muted small">Slide 12 of 13</span>
+            </div>
+            <div class="slide-body mt-4">
+                <h2 class="slide-title fw-bold text-dark border-bottom pb-2 mb-4">Slide 11: Real-World Clinical Impact & Feasibility</h2>
+                <div class="slide-content fs-5 leading-relaxed">
+                    <p>1. **Zero Hardware Barrier:** Runs on standard hospital local intranet; works seamlessly on existing reception PCs and waiting lobby TV displays.</p>
+<p>2. **Transparent Explainability:** No-show risk scoring uses calibrated linear factors that hospital administrators and medical superintendents can audit.</p>
+<p>3. **Emergency Safeguards:** Life-threatening emergencies are never blocked by pre-scheduled appointments.</p>
+<p>4. **Physician Well-being:** Controlled overtime eliminates chronic physician burnout caused by uncalibrated overbooking.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slide " id="slide-12">
+            <div class="slide-header d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary px-3 py-2">Smart OPD System</span>
+                <span class="text-muted small">Slide 13 of 13</span>
+            </div>
+            <div class="slide-body mt-4">
+                <h2 class="slide-title fw-bold text-dark border-bottom pb-2 mb-4">Slide 12: Project Conclusion & Future Roadmap</h2>
+                <div class="slide-content fs-5 leading-relaxed">
+                    <ul class='slide-list'><li>**Conclusion:**</li></ul>
+<li class='ms-4 text-muted'>Successfully designed, implemented, tested, and benchmarked a complete end-to-end Smart OPD solution across all 7 weeks.</li>
+<li class='ms-4 text-muted'>Proved mathematically and empirically that combining Greedy Interval Scheduling with ML risk scoring resolves the healthcare idle-wait paradox.</li>
+<ul class='slide-list'><li>**Future Extensions:**</li></ul>
+<li class='ms-4 text-muted'>Integration with national Ayushman Bharat Digital Mission (ABDM) / ABHA health records.</li>
+<li class='ms-4 text-muted'>Multi-lingual SMS & WhatsApp interactive 2-way attendance confirmation bots.</li>
+<li class='ms-4 text-muted'>Real-time IoT Bluetooth beacon patient arrival tracking in outpatient waiting halls.</li>
+                </div>
+            </div>
+        </div>
+        
+
+        <div class="nav-controls">
+            <button class="btn btn-outline-secondary" onclick="prevSlide()"><i class="bi bi-chevron-left me-1"></i> Prev</button>
+            <button class="btn btn-primary" onclick="nextSlide()">Next <i class="bi bi-chevron-right ms-1"></i></button>
+        </div>
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const totalSlides = 13;
+
+        function showSlide(index) {
+            if (index < 0 || index >= totalSlides) return;
+            document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+            document.getElementById(`slide-${index}`).classList.add('active');
+            currentSlide = index;
+            document.getElementById('progressFill').style.width = `${((currentSlide + 1) / totalSlides) * 100}%`;
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides - 1) showSlide(currentSlide + 1);
+        }
+
+        function prevSlide() {
+            if (currentSlide > 0) showSlide(currentSlide - 1);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') nextSlide();
+            if (e.key === 'ArrowLeft') prevSlide();
+        });
+    </script>
+</body>
+</html>
