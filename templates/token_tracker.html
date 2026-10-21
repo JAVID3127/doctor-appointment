@@ -135,13 +135,18 @@ function renderResults(records) {
                     <div class="col-sm-4 text-center">
                         <div class="small text-muted">Estimated Wait</div>
                         <div class="fw-bold fs-4 text-primary">${r.estimated_wait_mins} mins</div>
-                        <div class="small text-secondary">${r.ahead_count} patient(s) ahead</div>
+                        <div class="small text-secondary"><strong>#${r.queue_position || (r.ahead_count + 1)}</strong> in queue (${r.ahead_count} ahead)</div>
                     </div>
                 </div>
 
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3 text-muted small">
-                    <div><i class="bi bi-clock me-1"></i> Keep checking this page or watch the waiting hall display.</div>
-                    <div class="d-flex gap-2">
+                    <div><i class="bi bi-clock me-1"></i> Live token tracking updates automatically every 8 seconds.</div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        ${(r.status === 'BOOKED' || r.status === 'CONFIRMED') ? `
+                        <button type="button" class="btn btn-sm btn-success" id="checkin-btn-${r.appointment_id}" onclick="checkInFromTracker(${r.appointment_id}, '${r.token}', '${r.patient_phone}')">
+                            <i class="bi bi-geo-alt-fill me-1"></i> Check In (I've Arrived)
+                        </button>
+                        ` : ''}
                         ${canCancel ? `
                         <button type="button" class="btn btn-sm btn-outline-danger" id="cancel-btn-${r.appointment_id}" onclick="cancelFromTracker(${r.appointment_id}, '${r.token}', '${r.patient_phone}')">
                             <i class="bi bi-x-circle me-1"></i> Cancel Booking
@@ -155,6 +160,40 @@ function renderResults(records) {
             </div>
         </div>`;
     }).join('');
+}
+
+async function checkInFromTracker(apptId, token, phone) {
+    const btn = document.getElementById(`checkin-btn-${apptId}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Checking in...';
+    }
+
+    try {
+        const res = await fetch(`/api/appointments/${apptId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'CHECKED_IN', phone: phone })
+        });
+        const json = await res.json();
+
+        if (json.success) {
+            alert(`Token ${token} successfully checked in! You are now queued on the waiting hall display.`);
+            handleTrack();
+        } else {
+            alert(`Check-in error: ${json.error || 'Unknown error'}`);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-geo-alt-fill me-1"></i> Check In (I\'ve Arrived)';
+            }
+        }
+    } catch (err) {
+        alert("Failed to connect to hospital server: " + err.message);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-geo-alt-fill me-1"></i> Check In (I\'ve Arrived)';
+        }
+    }
 }
 
 async function cancelFromTracker(apptId, token, phone) {

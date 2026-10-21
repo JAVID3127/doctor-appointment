@@ -153,10 +153,10 @@
                                 </td>
                                 <td class="text-end">
                                     <div class="btn-group btn-group-sm">
-                                        {% if appt.status.value == 'BOOKED' or appt.status.value == 'CONFIRMED' %}
+                                        {% if appt.status.value in ['BOOKED', 'CONFIRMED'] %}
                                         <button class="btn btn-outline-info" onclick="updateApptStatus({{ appt.appointment_id }}, 'CHECKED_IN')" title="Mark Patient Arrived">Check In</button>
-                                        {% endif %}
-                                        {% if appt.status.value == 'CHECKED_IN' %}
+                                        <button class="btn btn-primary" onclick="updateApptStatus({{ appt.appointment_id }}, 'IN_CONSULTATION')" title="Call Patient to Room">Call Room</button>
+                                        {% elif appt.status.value == 'CHECKED_IN' %}
                                         <button class="btn btn-primary" onclick="updateApptStatus({{ appt.appointment_id }}, 'IN_CONSULTATION')" title="Call Patient to Room">Call Room</button>
                                         {% endif %}
                                         <button class="btn btn-outline-success" onclick="openPrescriptionModal({{ appt.appointment_id }}, '{{ appt.patient.name }}')" title="Prescription & Done">Rx</button>

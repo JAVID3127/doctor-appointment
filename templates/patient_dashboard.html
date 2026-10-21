@@ -87,6 +87,12 @@
                         </div>
 
                         <div class="d-flex flex-wrap gap-2 mt-auto">
+                            {% if appt.status in ['BOOKED', 'CONFIRMED'] %}
+                            <button type="button" class="btn btn-sm btn-success" id="checkin-btn-{{ appt.appointment_id }}" 
+                                    onclick="checkInPatientAppointment({{ appt.appointment_id }}, '{{ appt.token }}')">
+                                <i class="bi bi-geo-alt-fill me-1"></i> Check In
+                            </button>
+                            {% endif %}
                             {% if appt.has_prescription %}
                             <a href="{{ url_for('view_prescription', appointment_id=appt.appointment_id) }}" target="_blank" class="btn btn-sm btn-outline-success">
                                 <i class="bi bi-file-earmark-medical me-1"></i> Prescription
@@ -112,6 +118,52 @@
 </div>
 
 <script>
+async function checkInPatientAppointment(apptId, token) {
+    const btn = document.getElementById(`checkin-btn-${apptId}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Checking in...';
+    }
+
+    try {
+        const res = await fetch(`/api/appointments/${apptId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'CHECKED_IN' })
+        });
+        const json = await res.json();
+        const alertBox = document.getElementById('actionAlert');
+        const alertMsg = document.getElementById('actionAlertMsg');
+
+        if (json.success) {
+            alertBox.className = "alert alert-success alert-dismissible fade show";
+            alertMsg.textContent = `Token ${token} successfully checked in! You are now queued on the waiting hall display.`;
+            alertBox.classList.remove('d-none');
+
+            const badge = document.getElementById(`status-badge-${apptId}`);
+            if (badge) {
+                badge.className = "badge bg-primary";
+                badge.textContent = "WAITING IN HALL";
+            }
+            if (btn) btn.remove();
+        } else {
+            alertBox.className = "alert alert-danger alert-dismissible fade show";
+            alertMsg.textContent = `Check-in failed: ${json.error || 'Unknown error'}`;
+            alertBox.classList.remove('d-none');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-geo-alt-fill me-1"></i> Check In';
+            }
+        }
+    } catch (err) {
+        alert("Network error: " + err.message);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-geo-alt-fill me-1"></i> Check In';
+        }
+    }
+}
+
 async function cancelAppointment(apptId, token) {
     if (!confirm(`Are you sure you want to cancel appointment ${token}? This will immediately release the time slot for other waiting patients.`)) {
         return;

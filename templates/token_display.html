@@ -279,10 +279,16 @@
                             </span>
                         </div>
                         <h4 class="fw-bold mb-1 text-white">${room.doctor_name}</h4>
-                        <div class="text-info small mb-3">${room.specialization}</div>
+                        <div class="d-flex justify-content-between align-items-center text-info small mb-2">
+                            <span>${room.specialization}</span>
+                            <span class="text-white-50"><i class="bi bi-clock me-1 text-info"></i>${room.appointment_time || "Current Session"}</span>
+                        </div>
                         
                         <div class="bg-black bg-opacity-50 p-3 rounded text-center my-3 border border-secondary">
-                            <div class="text-uppercase text-secondary small fw-bold mb-1">Current Token in Room</div>
+                            <div class="d-flex justify-content-between align-items-center text-secondary small fw-bold mb-1 px-1">
+                                <span>CURRENT TOKEN</span>
+                                <span class="badge bg-dark border border-secondary text-info">OPD Position #1</span>
+                            </div>
                             <div class="token-badge">${room.current_token}</div>
                             <div class="text-light small mt-1">Patient: <strong class="text-warning">${room.current_patient}</strong></div>
                         </div>

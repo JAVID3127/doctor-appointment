@@ -528,15 +528,17 @@ class HospitalOPDService:
                 Appointment.status == AppointmentStatus.IN_CONSULTATION
             ).order_by(Appointment.appointment_id.desc()).first()
 
-            # Patients waiting in queue
+            # Patients waiting in queue (checked-in prioritized, followed by confirmed bookings)
             waiting_appts = self.session.query(Appointment).filter(
                 Appointment.doctor_id == doc.doctor_id,
                 Appointment.status.in_([AppointmentStatus.CHECKED_IN, AppointmentStatus.CONFIRMED, AppointmentStatus.BOOKED])
             ).order_by(Appointment.appointment_id.asc()).all()
 
             checked_in_appts = [a for a in waiting_appts if a.status == AppointmentStatus.CHECKED_IN]
-            waiting_count = len(checked_in_appts)
-            upcoming_tokens = [self.generate_token(a) for a in (checked_in_appts if checked_in_appts else waiting_appts)[:3]]
+            other_appts = [a for a in waiting_appts if a.status != AppointmentStatus.CHECKED_IN]
+            ordered_queue = checked_in_appts + other_appts
+            waiting_count = len(waiting_appts)
+            upcoming_tokens = [self.generate_token(a) for a in ordered_queue[:3]]
 
             # Completed count
             completed_count = self.session.query(Appointment).filter(
@@ -552,22 +554,26 @@ class HospitalOPDService:
                 patient_name = "-"
                 room_status = "ON_LEAVE"
                 status_text = "Doctor on Emergency Leave"
+                current_time = "-"
             elif current_in_room:
                 token = self.generate_token(current_in_room)
                 patient_name = self.mask_patient_name(current_in_room.patient.name) if current_in_room.patient else "-"
                 room_status = "IN_CONSULTATION"
                 status_text = "In Consultation"
-            elif waiting_count > 0:
-                first_wait = checked_in_appts[0]
+                current_time = f"{current_in_room.slot.start_time.strftime('%H:%M')} - {current_in_room.slot.end_time.strftime('%H:%M')}" if current_in_room.slot else "Current Slot"
+            elif ordered_queue:
+                first_wait = ordered_queue[0]
                 token = self.generate_token(first_wait)
                 patient_name = self.mask_patient_name(first_wait.patient.name) if first_wait.patient else "-"
                 room_status = "CALLING_PATIENT"
-                status_text = "Calling Next Patient"
+                status_text = "Calling Next Patient" if first_wait.status == AppointmentStatus.CHECKED_IN else "Next in Line"
+                current_time = f"{first_wait.slot.start_time.strftime('%H:%M')} - {first_wait.slot.end_time.strftime('%H:%M')}" if first_wait.slot else "Scheduled Slot"
             else:
                 token = "ROOM READY"
                 patient_name = "-"
                 room_status = "ROOM_READY"
                 status_text = "Ready for Next Patient"
+                current_time = "-"
 
             board.append({
                 "doctor_name": doc.name,
@@ -576,6 +582,7 @@ class HospitalOPDService:
                 "is_available": doc.is_available,
                 "current_token": token,
                 "current_patient": patient_name,
+                "appointment_time": current_time,
                 "room_status": room_status,
                 "status_text": status_text,
                 "patients_waiting": waiting_count,
@@ -643,12 +650,12 @@ class HospitalOPDService:
             token = self.generate_token(appt)
             doc = appt.doctor
 
-            # Calculate queue position: how many checked-in patients are ahead of this appointment
+            # Calculate queue position: how many patients are ahead of this appointment in the queue
             ahead_count = 0
             if appt.status in [AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED, AppointmentStatus.CHECKED_IN]:
                 ahead_count = self.session.query(Appointment).filter(
                     Appointment.doctor_id == appt.doctor_id,
-                    Appointment.status == AppointmentStatus.CHECKED_IN,
+                    Appointment.status.in_([AppointmentStatus.CHECKED_IN, AppointmentStatus.CONFIRMED, AppointmentStatus.BOOKED]),
                     Appointment.appointment_id < appt.appointment_id
                 ).count()
 
@@ -667,6 +674,7 @@ class HospitalOPDService:
                 "status": appt.status.value,
                 "is_overbooked": appt.is_secondary_overbook,
                 "ahead_count": ahead_count,
+                "queue_position": ahead_count + 1,
                 "estimated_wait_mins": est_wait
             })
 
