@@ -327,21 +327,37 @@ class HospitalOPDService:
         if not slot:
             raise ValueError(f"Time slot #{slot_id} not found.")
 
+        if slot.doctor_id != doctor_id:
+            raise ValueError(f"Selected time slot does not belong to Doctor #{doctor_id}.")
+
+        # Prevent duplicate bookings by the same patient for the same time slot
+        existing_patient_booking = self.session.query(Appointment).filter(
+            Appointment.patient_id == patient.patient_id,
+            Appointment.slot_id == slot_id,
+            Appointment.status.notin_([AppointmentStatus.CANCELLED])
+        ).first()
+        if existing_patient_booking:
+            raise ValueError(f"You already hold an active booking ({self.generate_token(existing_patient_booking)}) for this consultation slot.")
+
         # 2. Predict no-show probability using patient behavior
-        p_noshow = self.predict_no_show_probability(lead_days, patient.no_show_ratio, sms_sent, patient.age)
+        p_noshow = self.predict_no_show_probability(lead_days, patient.no_show_ratio, sms_sent, patient.age, gender=patient.gender)
 
-        # 3. Booking / Overbooking logic
+        # 3. Booking / Overbooking logic based on persisted slot occupancy
+        active_appts = self.session.query(Appointment).filter(
+            Appointment.slot_id == slot_id,
+            Appointment.status.notin_([AppointmentStatus.CANCELLED])
+        ).all()
+
         is_overbook = False
-        if slot.is_booked:
-            if slot.is_overbooked:
-                raise ValueError("This slot has reached maximum capacity (primary + secondary overbook already filled).")
-            # Evaluate overbooking threshold
-            if p_noshow < OVERBOOK_NO_SHOW_THRESHOLD:
-                # Check existing primary patient risk
-                primary_appt = self.session.query(Appointment).filter(Appointment.slot_id == slot_id).first()
-                if not primary_appt or primary_appt.predicted_no_show_prob < OVERBOOK_NO_SHOW_THRESHOLD:
-                    raise ValueError(f"Slot is booked. Overbooking denied (no-show risk too low to guarantee no delay).")
-
+        if len(active_appts) >= 2:
+            slot.is_booked = True
+            slot.is_overbooked = True
+            self.session.commit()
+            raise ValueError("This slot has reached maximum capacity (primary + secondary overbook already filled).")
+        elif len(active_appts) == 1:
+            primary_appt = active_appts[0]
+            if p_noshow < OVERBOOK_NO_SHOW_THRESHOLD and primary_appt.predicted_no_show_prob < OVERBOOK_NO_SHOW_THRESHOLD:
+                raise ValueError("Slot is already booked. Smart overbooking denied: predicted attendance is high for both patients, preventing delays.")
             slot.is_overbooked = True
             is_overbook = True
         else:
@@ -387,6 +403,16 @@ class HospitalOPDService:
 
         target_status = AppointmentStatus(new_status_str)
         appt.status = target_status
+
+        # If calling a patient into consultation, complete any previous active consultation in that room
+        if target_status == AppointmentStatus.IN_CONSULTATION:
+            prev_active = self.session.query(Appointment).filter(
+                Appointment.doctor_id == appt.doctor_id,
+                Appointment.appointment_id != appointment_id,
+                Appointment.status == AppointmentStatus.IN_CONSULTATION
+            ).all()
+            for prev in prev_active:
+                prev.status = AppointmentStatus.COMPLETED
 
         # If cancelled, execute promotion logic
         if target_status == AppointmentStatus.CANCELLED:
@@ -492,33 +518,70 @@ class HospitalOPDService:
 
     def get_waiting_hall_token_board(self) -> List[Dict[str, Any]]:
         """Data for big screen token display in OPD waiting hall."""
-        doctors = self.session.query(Doctor).filter(Doctor.is_available == True).all()
+        doctors = self.session.query(Doctor).order_by(Doctor.room_number).all()
         board = []
 
         for doc in doctors:
+            # Active patient currently in consultation room
             current_in_room = self.session.query(Appointment).filter(
                 Appointment.doctor_id == doc.doctor_id,
                 Appointment.status == AppointmentStatus.IN_CONSULTATION
-            ).first()
+            ).order_by(Appointment.appointment_id.desc()).first()
 
-            waiting_patients = self.session.query(Appointment).filter(
+            # Patients waiting in queue
+            waiting_appts = self.session.query(Appointment).filter(
                 Appointment.doctor_id == doc.doctor_id,
-                Appointment.status == AppointmentStatus.CHECKED_IN
+                Appointment.status.in_([AppointmentStatus.CHECKED_IN, AppointmentStatus.CONFIRMED, AppointmentStatus.BOOKED])
+            ).order_by(Appointment.appointment_id.asc()).all()
+
+            checked_in_appts = [a for a in waiting_appts if a.status == AppointmentStatus.CHECKED_IN]
+            waiting_count = len(checked_in_appts)
+            upcoming_tokens = [self.generate_token(a) for a in (checked_in_appts if checked_in_appts else waiting_appts)[:3]]
+
+            # Completed count
+            completed_count = self.session.query(Appointment).filter(
+                Appointment.doctor_id == doc.doctor_id,
+                Appointment.status == AppointmentStatus.COMPLETED
             ).count()
 
-            token = self.generate_token(current_in_room) if current_in_room else "ROOM READY"
-            patient_name = self.mask_patient_name(current_in_room.patient.name) if current_in_room else "-"
-
             slot_dur = doc.department.default_slot_duration_mins if doc.department else 15
+
+            # Determine token and display status
+            if not doc.is_available:
+                token = "ON LEAVE"
+                patient_name = "-"
+                room_status = "ON_LEAVE"
+                status_text = "Doctor on Emergency Leave"
+            elif current_in_room:
+                token = self.generate_token(current_in_room)
+                patient_name = self.mask_patient_name(current_in_room.patient.name) if current_in_room.patient else "-"
+                room_status = "IN_CONSULTATION"
+                status_text = "In Consultation"
+            elif waiting_count > 0:
+                first_wait = checked_in_appts[0]
+                token = self.generate_token(first_wait)
+                patient_name = self.mask_patient_name(first_wait.patient.name) if first_wait.patient else "-"
+                room_status = "CALLING_PATIENT"
+                status_text = "Calling Next Patient"
+            else:
+                token = "ROOM READY"
+                patient_name = "-"
+                room_status = "ROOM_READY"
+                status_text = "Ready for Next Patient"
 
             board.append({
                 "doctor_name": doc.name,
                 "specialization": doc.specialization,
                 "room_number": doc.room_number,
+                "is_available": doc.is_available,
                 "current_token": token,
                 "current_patient": patient_name,
-                "patients_waiting": waiting_patients,
-                "estimated_delay_mins": waiting_patients * slot_dur
+                "room_status": room_status,
+                "status_text": status_text,
+                "patients_waiting": waiting_count,
+                "upcoming_tokens": upcoming_tokens,
+                "completed_today": completed_count,
+                "estimated_delay_mins": waiting_count * slot_dur
             })
 
         return board

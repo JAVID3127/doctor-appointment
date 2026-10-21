@@ -90,6 +90,26 @@ def train_and_evaluate_models(csv_path: str) -> Dict[str, Any]:
         "saved_path": str(SAVED_MODEL_PATH)
     }
 
+class NoShowModelTrainer:
+    """
+    Production-grade training orchestrator for online continuous retraining
+    and serialization of the OPD no-show prediction pipeline.
+    """
+    def __init__(self, data_path: str = None):
+        default_csv = Path(__file__).resolve().parent.parent.parent / "data" / "opd_appointments_dataset.csv"
+        self.data_path = data_path or str(default_csv)
+
+    def train_and_export(self, model_path: str = None) -> Dict[str, Any]:
+        results = train_and_evaluate_models(self.data_path)
+        return {
+            "champion_model_name": results["champion_model_name"],
+            "roc_auc": round(float(results["random_forest"]["roc_auc"]), 3),
+            "accuracy": round(float(results["random_forest"]["accuracy"]), 3),
+            "precision": round(float(results["random_forest"]["precision"]), 3),
+            "recall": round(float(results["random_forest"]["recall"]), 3),
+            "saved_path": results["saved_path"]
+        }
+
 if __name__ == "__main__":
     data_file = Path(__file__).resolve().parent.parent.parent / "data" / "opd_appointments_dataset.csv"
     train_and_evaluate_models(str(data_file))

@@ -402,7 +402,39 @@ def create_app(custom_engine=None):
     def api_token_board():
         service = get_service()
         board = service.get_waiting_hall_token_board()
-        return jsonify({"timestamp": os.getenv("OPD_TIME", "Live"), "board": board})
+        total_waiting = sum(r.get("patients_waiting", 0) for r in board)
+        total_completed = sum(r.get("completed_today", 0) for r in board)
+        active_rooms = sum(1 for r in board if r.get("is_available", True))
+        return jsonify({
+            "timestamp": datetime.now().strftime("%I:%M:%S %p"),
+            "board": board,
+            "summary": {
+                "total_waiting": total_waiting,
+                "total_completed": total_completed,
+                "active_rooms": active_rooms
+            }
+        })
+
+    @app.route("/health", methods=["GET"])
+    @app.route("/api/health", methods=["GET"])
+    def health_check():
+        """Hospital OPD System and Database health check probe."""
+        try:
+            from sqlalchemy import text
+            service = get_service()
+            service.session.execute(text("SELECT 1"))
+            return jsonify({
+                "status": "healthy",
+                "service": "Smart OPD Scheduling System",
+                "database": "connected",
+                "timestamp": datetime.now().isoformat()
+            }), 200
+        except Exception as e:
+            return jsonify({
+                "status": "unhealthy",
+                "database": "disconnected",
+                "error": str(e)
+            }), 503
 
     @app.route("/api/queue/track", methods=["GET"])
     def api_track_token():

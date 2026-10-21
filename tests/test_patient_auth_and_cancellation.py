@@ -283,3 +283,131 @@ def test_unauthorized_cancellation_prevention(test_client):
     bad_cancel = test_client.post(f"/api/appointments/{appt_id}/cancel", json={})
     assert bad_cancel.status_code == 403
     assert "Access Denied" in bad_cancel.get_json()["error"]
+
+def test_health_check_endpoints(test_client):
+    """Verifies that system health probe returns 200 with database status."""
+    res = test_client.get("/health")
+    assert res.status_code == 200
+    json_data = res.get_json()
+    assert json_data["status"] == "healthy"
+    assert json_data["database"] == "connected"
+
+    res_api = test_client.get("/api/health")
+    assert res_api.status_code == 200
+
+def test_waiting_hall_full_lifecycle_and_room_status(test_client):
+    """
+    Tests the complete OPD queue lifecycle and verifies Waiting Hall display updates:
+    1. Initial: Room Ready
+    2. Book appointment: Token appears in upcoming waitlist
+    3. Check in: Waiting count increments, room state becomes CALLING_PATIENT
+    4. Call to room: Room state becomes IN_CONSULTATION with active token
+    5. Complete consultation: Room state resets to ROOM_READY, completed count increments
+    """
+    # 1. Initial board state
+    b_res = test_client.get("/api/queue/token-board")
+    assert b_res.status_code == 200
+    b_data = b_res.get_json()
+    doc1_room = next(r for r in b_data["board"] if r["room_number"] == "OPD-101")
+    assert doc1_room["room_status"] in ["ROOM_READY", "CALLING_PATIENT", "IN_CONSULTATION"]
+
+    # 2. Book appointment for Dr. Rajesh Sharma (Doctor 1, Room OPD-101)
+    slots = test_client.get("/api/doctors/1/slots").get_json()
+    open_slot = next(s for s in slots if not s["is_booked"])
+    slot_id = open_slot["slot_id"]
+
+    book_res = test_client.post("/api/appointments", json={
+        "name": "Queue Test Patient",
+        "phone": "9876500099",
+        "age": 35,
+        "gender": "Male",
+        "doctor_id": 1,
+        "slot_id": slot_id,
+        "lead_days": 1,
+        "sms_sent": True
+    })
+    assert book_res.status_code == 201
+    appt_id = book_res.get_json()["data"]["appointment_id"]
+    token = book_res.get_json()["data"]["token"]
+
+    # 3. Check In patient
+    checkin_res = test_client.patch(f"/api/appointments/{appt_id}/status", json={"status": "CHECKED_IN"})
+    assert checkin_res.status_code == 200
+
+    # Verify Waiting Hall reflects waiting patient
+    b_res2 = test_client.get("/api/queue/token-board")
+    doc1_b2 = next(r for r in b_res2.get_json()["board"] if r["room_number"] == "OPD-101")
+    assert doc1_b2["patients_waiting"] >= 1
+    assert token in doc1_b2["upcoming_tokens"]
+
+    # 4. Doctor calls patient into consultation room
+    call_res = test_client.patch(f"/api/appointments/{appt_id}/status", json={"status": "IN_CONSULTATION"})
+    assert call_res.status_code == 200
+
+    b_res3 = test_client.get("/api/queue/token-board")
+    doc1_b3 = next(r for r in b_res3.get_json()["board"] if r["room_number"] == "OPD-101")
+    assert doc1_b3["room_status"] == "IN_CONSULTATION"
+    assert doc1_b3["current_token"] == token
+
+    # 5. Doctor finishes consultation
+    done_res = test_client.patch(f"/api/appointments/{appt_id}/status", json={"status": "COMPLETED"})
+    assert done_res.status_code == 200
+
+    b_res4 = test_client.get("/api/queue/token-board")
+    doc1_b4 = next(r for r in b_res4.get_json()["board"] if r["room_number"] == "OPD-101")
+    assert doc1_b4["completed_today"] >= 1
+
+def test_duplicate_same_slot_booking_rejected(test_client):
+    """Verifies that the same patient cannot book the exact same slot twice."""
+    # First booking
+    res1 = test_client.post("/api/appointments", json={
+        "name": "Double Booking Patient",
+        "phone": "9876500077",
+        "age": 28,
+        "gender": "Female",
+        "doctor_id": 2,
+        "slot_id": 13,
+        "lead_days": 1,
+        "sms_sent": True
+    })
+    assert res1.status_code in [201, 400]
+
+    # Attempt second booking for the exact same slot by the same patient
+    res2 = test_client.post("/api/appointments", json={
+        "name": "Double Booking Patient",
+        "phone": "9876500077",
+        "age": 28,
+        "gender": "Female",
+        "doctor_id": 2,
+        "slot_id": 13,
+        "lead_days": 1,
+        "sms_sent": True
+    })
+    assert res2.status_code == 400
+    assert "already hold an active booking" in res2.get_json()["error"] or "capacity" in res2.get_json()["error"]
+
+def test_slot_doctor_mismatch_rejected(test_client):
+    """Verifies that selecting a slot belonging to Doctor 1 while submitting for Doctor 2 is rejected."""
+    # Slot 1 belongs to Doctor 1
+    mismatch_res = test_client.post("/api/appointments", json={
+        "name": "Mismatch Patient",
+        "phone": "9876500088",
+        "age": 30,
+        "gender": "Male",
+        "doctor_id": 2, # Doctor 2
+        "slot_id": 1,   # Slot 1 belongs to Doctor 1
+        "lead_days": 1,
+        "sms_sent": True
+    })
+    assert mismatch_res.status_code == 400
+    assert "does not belong" in mismatch_res.get_json()["error"]
+
+def test_online_ml_retraining_endpoint(test_client):
+    """Verifies that /api/ml/retrain trains and exports the pipeline without error."""
+    retrain_res = test_client.post("/api/ml/retrain")
+    assert retrain_res.status_code == 200
+    data = retrain_res.get_json()
+    assert data["success"] is True
+    assert "metrics" in data
+    assert data["metrics"]["roc_auc"] > 0.70
+

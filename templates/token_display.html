@@ -30,7 +30,7 @@
         }
         .token-badge {
             font-family: 'Courier New', Courier, monospace;
-            font-size: 2.8rem;
+            font-size: 2.7rem;
             font-weight: 800;
             letter-spacing: 2px;
             color: #5bc0be;
@@ -40,8 +40,8 @@
             background-color: #48cae4;
             color: #0b132b;
             font-weight: 800;
-            font-size: 1.3rem;
-            padding: 4px 16px;
+            font-size: 1.25rem;
+            padding: 4px 14px;
             border-radius: 6px;
         }
         .blink-status {
@@ -55,33 +55,81 @@
         .ticker {
             background-color: #111d4a;
             border-top: 2px solid #ff5722;
-            font-size: 1.1rem;
+            font-size: 1.05rem;
+        }
+        .status-pill-consulting {
+            background-color: #2ec4b6;
+            color: #0b132b;
+            font-weight: 700;
+        }
+        .status-pill-calling {
+            background-color: #ff9f1c;
+            color: #0b132b;
+            font-weight: 700;
+            animation: pulse-glow 1.2s infinite;
+        }
+        .status-pill-ready {
+            background-color: #3a86ff;
+            color: #ffffff;
+            font-weight: 600;
+        }
+        .status-pill-leave {
+            background-color: #e63946;
+            color: #ffffff;
+            font-weight: 600;
         }
     </style>
 </head>
-<body class="d-flex flex-column min-vh-100">
+<body class="d-flex flex-column min-vh-100" onclick="enableAudioOnClick()">
 
     <!-- Top Display Header -->
     <header class="header-bar py-3 px-4 shadow">
-        <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
             <div class="d-flex align-items-center gap-3">
                 <i class="bi bi-hospital fs-1 text-info"></i>
                 <div>
                     <h2 class="fw-bold mb-0 text-white tracking-wide">CENTRAL OPD WAITING HALL</h2>
-                    <small class="text-info fw-semibold text-uppercase tracking-wider">Automated Token &amp; Consultation Call System</small>
+                    <small class="text-info fw-semibold text-uppercase tracking-wider">Automated Digital Token Board &amp; Room Calling Feed</small>
                 </div>
             </div>
+            
+            <!-- Live KPI Counters -->
+            <div class="d-flex align-items-center gap-3 bg-dark bg-opacity-50 px-3 py-2 rounded-3 border border-secondary">
+                <div class="text-center px-2">
+                    <div class="small text-secondary text-uppercase fw-bold" style="font-size: 0.75rem;">Waiting</div>
+                    <div class="fs-4 fw-bold text-warning" id="kpiWaiting">--</div>
+                </div>
+                <div class="vr bg-secondary"></div>
+                <div class="text-center px-2">
+                    <div class="small text-secondary text-uppercase fw-bold" style="font-size: 0.75rem;">Completed</div>
+                    <div class="fs-4 fw-bold text-success" id="kpiCompleted">--</div>
+                </div>
+                <div class="vr bg-secondary"></div>
+                <div class="text-center px-2">
+                    <div class="small text-secondary text-uppercase fw-bold" style="font-size: 0.75rem;">Active Rooms</div>
+                    <div class="fs-4 fw-bold text-info" id="kpiRooms">--</div>
+                </div>
+            </div>
+
             <div class="text-end d-flex align-items-center gap-3">
-                <button id="audioToggleBtn" class="btn btn-sm btn-outline-info" onclick="toggleAudio()">
+                <button id="audioToggleBtn" class="btn btn-sm btn-outline-info" onclick="toggleAudio(event)">
                     <i class="bi bi-volume-up-fill me-1"></i> Audio: ON
                 </button>
                 <div>
                     <div id="liveClock" class="fs-2 fw-bold font-monospace text-warning">00:00:00</div>
-                    <div class="badge bg-success-subtle text-success border border-success"><i class="bi bi-broadcast me-1 blink-status"></i> LIVE QUEUE FEED</div>
+                    <div class="badge bg-success-subtle text-success border border-success" id="connStatus">
+                        <i class="bi bi-broadcast me-1 blink-status"></i> LIVE QUEUE FEED
+                    </div>
                 </div>
             </div>
         </div>
     </header>
+
+    <!-- Audio Helper Banner -->
+    <div id="audioNotice" class="alert alert-info alert-dismissible fade show mb-0 py-2 text-center rounded-0 border-0 bg-info bg-opacity-25 text-white small" role="alert">
+        <i class="bi bi-volume-up-fill me-1 text-warning"></i> Click anywhere on this screen to ensure loud audio token call announcements are unmuted.
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+    </div>
 
     <!-- Main Token Grid Container -->
     <main class="container-fluid px-4 py-4 flex-grow-1">
@@ -89,22 +137,33 @@
             <!-- Dynamic tokens injected via JavaScript -->
             <div class="col-12 text-center py-5">
                 <div class="spinner-border text-info" role="status"></div>
-                <div class="mt-2 text-muted">Connecting to hospital queue server...</div>
+                <div class="mt-2 text-muted fs-5">Loading hospital consultation rooms...</div>
             </div>
         </div>
     </main>
 
     <!-- Footer Emergency Ticker -->
     <footer class="ticker py-2 px-4 text-center">
-        <span class="text-warning fw-bold"><i class="bi bi-info-circle-fill me-1"></i> NOTICE:</span>
-        <span class="text-white-50 ms-2">Patients are requested to arrive at their assigned room when token is displayed. Emergency walk-ins are prioritized per medical triage severity protocols.</span>
+        <span class="text-warning fw-bold"><i class="bi bi-info-circle-fill me-1"></i> OPD PROTOCOL:</span>
+        <span class="text-white-50 ms-2">When your token is called, please enter the designated consultation room. Emergency walk-ins are prioritized per hospital triage protocols.</span>
     </footer>
 
     <script>
         let audioEnabled = true;
+        let audioUnlocked = false;
         let lastTokensByRoom = {};
+        let failureStreak = 0;
 
-        function toggleAudio() {
+        function enableAudioOnClick() {
+            if (!audioUnlocked && 'speechSynthesis' in window) {
+                audioUnlocked = true;
+                const notice = document.getElementById('audioNotice');
+                if (notice) notice.classList.add('d-none');
+            }
+        }
+
+        function toggleAudio(e) {
+            if (e) e.stopPropagation();
             audioEnabled = !audioEnabled;
             const btn = document.getElementById('audioToggleBtn');
             btn.innerHTML = audioEnabled 
@@ -117,8 +176,7 @@
             if (!audioEnabled || !('speechSynthesis' in window)) return;
             try {
                 window.speechSynthesis.cancel();
-                // Phonetic speech format for clear audio in loud waiting halls
-                const message = `Token ${token}. Please proceed to Consultation Room ${room}.`;
+                const message = `Token ${token}. Please proceed to Room ${room}.`;
                 const utterance = new SpeechSynthesisUtterance(message);
                 utterance.rate = 0.9;
                 utterance.pitch = 1.0;
@@ -140,16 +198,36 @@
                 const res = await fetch('/api/queue/token-board');
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
+                
+                failureStreak = 0;
+                const connBadge = document.getElementById('connStatus');
+                connBadge.className = "badge bg-success-subtle text-success border border-success";
+                connBadge.innerHTML = '<i class="bi bi-broadcast me-1 blink-status"></i> LIVE QUEUE FEED';
+
+                if (data.summary) {
+                    document.getElementById('kpiWaiting').textContent = data.summary.total_waiting ?? 0;
+                    document.getElementById('kpiCompleted').textContent = data.summary.total_completed ?? 0;
+                    document.getElementById('kpiRooms').textContent = data.summary.active_rooms ?? 0;
+                }
+
                 renderBoard(data.board);
             } catch (err) {
                 console.error("Token board sync error:", err);
+                failureStreak++;
+                const connBadge = document.getElementById('connStatus');
+                connBadge.className = "badge bg-warning-subtle text-warning border border-warning";
+                connBadge.innerHTML = `<i class="bi bi-arrow-repeat me-1 blink-status"></i> RECONNECTING (${failureStreak})`;
+
                 const container = document.getElementById('boardContainer');
                 if (container && container.querySelector('.spinner-border')) {
                     container.innerHTML = `
                         <div class="col-12 text-center text-warning py-5">
-                            <i class="bi bi-broadcast fs-1 mb-2 d-block blink-status"></i>
+                            <i class="bi bi-wifi-off fs-1 mb-3 d-block blink-status"></i>
                             <h4 class="fw-bold">Connecting to Central OPD Queue Stream...</h4>
-                            <p class="text-white-50 small mb-0">Retrying connection automatically. Please wait.</p>
+                            <p class="text-white-50 small mb-3">Re-establishing link with hospital database. Auto-reconnecting.</p>
+                            <button class="btn btn-outline-info btn-sm" onclick="fetchTokenBoard()">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Retry Connection Now
+                            </button>
                         </div>
                     `;
                 }
@@ -159,26 +237,45 @@
         function renderBoard(rooms) {
             const container = document.getElementById('boardContainer');
             if (!rooms || rooms.length === 0) {
-                container.innerHTML = '<div class="col-12 text-center text-muted py-5"><h3>No active OPD rooms currently consulting.</h3></div>';
+                container.innerHTML = '<div class="col-12 text-center text-muted py-5"><h3>No active OPD rooms currently configured.</h3></div>';
                 return;
             }
 
-            // Check if any room has called a new token
+            // Check if any room called a new token
             rooms.forEach(room => {
                 const prev = lastTokensByRoom[room.room_number];
-                if (room.current_token && room.current_token !== "ROOM READY" && prev && prev !== room.current_token) {
+                if (room.current_token && room.current_token !== "ROOM READY" && room.current_token !== "ON LEAVE" && prev && prev !== room.current_token) {
                     announceToken(room.current_token, room.room_number);
                 }
                 lastTokensByRoom[room.room_number] = room.current_token;
             });
 
-            container.innerHTML = rooms.map(room => `
+            container.innerHTML = rooms.map(room => {
+                let statusClass = "status-pill-ready";
+                let statusBadgeText = room.status_text || "Room Ready";
+
+                if (room.room_status === "IN_CONSULTATION") {
+                    statusClass = "status-pill-consulting";
+                    statusBadgeText = "In Consultation";
+                } else if (room.room_status === "CALLING_PATIENT") {
+                    statusClass = "status-pill-calling";
+                    statusBadgeText = "NOW CALLING";
+                } else if (room.room_status === "ON_LEAVE" || !room.is_available) {
+                    statusClass = "status-pill-leave";
+                    statusBadgeText = "Doctor on Leave";
+                }
+
+                const upcomingList = (room.upcoming_tokens && room.upcoming_tokens.length > 0)
+                    ? room.upcoming_tokens.map(t => `<span class="badge bg-secondary font-monospace">${t}</span>`).join(' ')
+                    : '<span class="text-muted small">No waitlist</span>';
+
+                return `
                 <div class="col-md-6 col-xl-4">
                     <div class="token-card p-4 h-100 shadow">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <span class="room-tag">${room.room_number}</span>
-                            <span class="badge bg-dark border border-secondary text-light px-3 py-2">
-                                <i class="bi bi-hourglass-split me-1 text-warning"></i> ${room.patients_waiting} Waiting
+                            <span class="badge ${statusClass} px-3 py-2 fs-6">
+                                ${statusBadgeText}
                             </span>
                         </div>
                         <h4 class="fw-bold mb-1 text-white">${room.doctor_name}</h4>
@@ -190,18 +287,24 @@
                             <div class="text-light small mt-1">Patient: <strong class="text-warning">${room.current_patient}</strong></div>
                         </div>
 
-                        <div class="d-flex justify-content-between text-secondary small pt-2 border-top border-secondary">
-                            <span>Estimated Queue Delay:</span>
-                            <span class="text-light fw-bold">${room.estimated_delay_mins} mins</span>
+                        <div class="d-flex justify-content-between text-secondary small pt-2 mb-2">
+                            <span><i class="bi bi-people me-1"></i> Waiting Queue:</span>
+                            <span class="text-light fw-bold">${room.patients_waiting} patient(s)</span>
+                        </div>
+
+                        <div class="d-flex justify-content-between text-secondary small pt-1 border-top border-secondary">
+                            <span>Next in Line:</span>
+                            <div>${upcomingList}</div>
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
-        // Poll every 3 seconds for real-time responsiveness
+        // Poll every 2.5 seconds for real-time responsiveness
         fetchTokenBoard();
-        setInterval(fetchTokenBoard, 3000);
+        setInterval(fetchTokenBoard, 2500);
     </script>
 </body>
 </html>
