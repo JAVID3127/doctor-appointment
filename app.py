@@ -398,6 +398,15 @@ def create_app(custom_engine=None):
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 400
 
+    @app.route("/api/doctors/<int:doctor_id>/available", methods=["POST"])
+    def api_doctor_available(doctor_id):
+        service = get_service()
+        try:
+            result = service.set_doctor_availability(doctor_id, True)
+            return jsonify({"success": True, "data": result})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 400
+
     @app.route("/api/queue/token-board", methods=["GET"])
     def api_token_board():
         service = get_service()

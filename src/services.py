@@ -516,6 +516,22 @@ class HospitalOPDService:
             "reassignments": reassignments
         }
 
+    def set_doctor_availability(self, doctor_id: int, is_available: bool = True) -> Dict[str, Any]:
+        """Sets doctor on-duty status (e.g. resumes duty after leave)."""
+        doc = self.session.query(Doctor).filter(Doctor.doctor_id == doctor_id).first()
+        if not doc:
+            raise ValueError(f"Doctor #{doctor_id} not found.")
+
+        doc.is_available = is_available
+        self.session.commit()
+        self.session.refresh(doc)
+        return {
+            "doctor_id": doc.doctor_id,
+            "doctor_name": doc.name,
+            "is_available": doc.is_available,
+            "status": "Available / On Duty" if doc.is_available else "On Leave"
+        }
+
     def get_waiting_hall_token_board(self) -> List[Dict[str, Any]]:
         """Data for big screen token display in OPD waiting hall."""
         doctors = self.session.query(Doctor).order_by(Doctor.room_number).all()
