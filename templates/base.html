@@ -41,6 +41,11 @@
                     <li class="nav-item">
                         <a class="nav-link text-warning fw-semibold" href="{{ url_for('token_display') }}" target="_blank"><i class="bi bi-tv me-1"></i> Live Token Board ↗</a>
                     </li>
+                    {% if session.get('patient') %}
+                    <li class="nav-item">
+                        <a class="nav-link text-warning fw-semibold" href="{{ url_for('patient_dashboard') }}"><i class="bi bi-person-lines-fill me-1"></i> My Appointments</a>
+                    </li>
+                    {% endif %}
                 </ul>
                 <div class="d-flex align-items-center gap-2">
                     {% if session.get('user') %}
@@ -59,7 +64,24 @@
                             <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
                         </ul>
                     </div>
+                    {% elif session.get('patient') %}
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-light dropdown-toggle d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-check-fill text-success"></i>
+                            <span>{{ session['patient'].get('name', 'Patient') }}</span>
+                            <span class="badge bg-success text-white ms-1">Patient</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow">
+                            <li><a class="dropdown-item" href="{{ url_for('patient_dashboard') }}"><i class="bi bi-calendar2-heart me-2 text-primary"></i>My Appointments</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('patient_booking') }}"><i class="bi bi-plus-circle me-2 text-success"></i>Book New Slot</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
+                        </ul>
+                    </div>
                     {% else %}
+                    <a href="{{ url_for('register') }}" class="btn btn-sm btn-warning text-dark fw-semibold">
+                        <i class="bi bi-person-plus-fill me-1"></i> Register
+                    </a>
                     <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-light">
                         <i class="bi bi-shield-lock me-1"></i> Staff Login
                     </a>

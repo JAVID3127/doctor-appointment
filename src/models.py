@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Enum as SQLEnum, CheckConstraint, Index
 )
@@ -77,11 +78,22 @@ class Patient(Base):
     gender = Column(String(10), nullable=False)
     phone = Column(String(20), unique=True, nullable=False, index=True)
     email = Column(String(120), nullable=True, index=True)
+    password_hash = Column(String(255), nullable=True)
     total_visits = Column(Integer, default=0, nullable=False)
     past_no_shows = Column(Integer, default=0, nullable=False)
 
     appointments = relationship("Appointment", back_populates="patient")
     triages = relationship("EmergencyTriage", back_populates="patient")
+
+    def set_password(self, password: str):
+        """Hashes and sets patient password securely using pbkdf2:sha256."""
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password: str) -> bool:
+        """Verifies supplied password against stored cryptographic hash."""
+        if not self.password_hash:
+            return False
+        return check_password_hash(self.password_hash, password)
 
     @property
     def no_show_ratio(self) -> float:

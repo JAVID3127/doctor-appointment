@@ -54,11 +54,13 @@
                     <div class="row g-3 mb-4">
                         <div class="col-md-6">
                             <label class="form-label fw-semibold" id="lblFullName">Full Name *</label>
-                            <input type="text" class="form-control" id="patientName" required minlength="2" placeholder="e.g. Ramesh Kumar">
+                            <input type="text" class="form-control" id="patientName" required minlength="2" 
+                                   value="{{ session.get('patient', {}).get('name', '') }}" placeholder="e.g. Ramesh Kumar">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold" id="lblMobile">Mobile Number (10 Digits) *</label>
-                            <input type="tel" class="form-control" id="patientPhone" required pattern="[0-9]{10}" maxlength="10" placeholder="e.g. 9876543210">
+                            <input type="tel" class="form-control" id="patientPhone" required pattern="[0-9]{10}" maxlength="10" 
+                                   value="{{ session.get('patient', {}).get('phone', '') }}" placeholder="e.g. 9876543210">
                             <div class="form-text small" id="lblMobileHelp">Standard 10-digit mobile number for token SMS updates.</div>
                         </div>
                         <div class="col-md-4">
@@ -100,13 +102,20 @@
                     </div>
 
                     <!-- Available Consultation Interval Slots -->
-                    <h5 class="fw-bold text-secondary mb-3 border-bottom pb-2" id="sec3Title">3. Select Appointment Interval Slot</h5>
-                    <div class="mb-4">
-                        <label class="form-label fw-semibold" id="lblSlots">Available Consultation Slots *</label>
-                        <select class="form-select" id="slotSelect" required disabled>
-                            <option value="" disabled selected id="optChooseSlot">First select a doctor...</option>
-                        </select>
-                        <small class="text-muted" id="lblSlotHelp">Standard slots are allocated via Greedy Interval Partitioning.</small>
+                    <h5 class="fw-bold text-secondary mb-3 border-bottom pb-2" id="sec3Title">3. Select Date &amp; Appointment Interval Slot</h5>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold" id="lblDate"><i class="bi bi-calendar-event me-1 text-primary"></i> Consultation Date *</label>
+                            <input type="date" class="form-control" id="appointmentDate" onchange="onDateChange()" required>
+                            <div class="form-text small">Select consultation date (today up to 14 days ahead).</div>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold" id="lblSlots"><i class="bi bi-clock me-1 text-primary"></i> Available Consultation Slots *</label>
+                            <select class="form-select" id="slotSelect" required disabled>
+                                <option value="" disabled selected id="optChooseSlot">First select a doctor...</option>
+                            </select>
+                            <small class="text-muted" id="lblSlotHelp">Standard slots are allocated via Greedy Interval Partitioning.</small>
+                        </div>
                     </div>
 
                     <!-- Lead time & notifications -->
@@ -160,11 +169,14 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer bg-light d-flex justify-content-between">
+            <div class="modal-footer bg-light d-flex justify-content-between flex-wrap gap-2">
                 <button type="button" class="btn btn-outline-dark" onclick="window.print()">
                     <i class="bi bi-printer-fill me-1"></i> Print Token Slip
                 </button>
                 <div class="d-flex gap-2">
+                    <a href="{{ url_for('patient_dashboard') }}" class="btn btn-success">
+                        <i class="bi bi-person-lines-fill me-1"></i> My Appointments
+                    </a>
                     <a href="{{ url_for('patient_token_tracker') }}" class="btn btn-outline-primary">
                         <i class="bi bi-search me-1"></i> Track Token
                     </a>
@@ -358,20 +370,55 @@ async function onDepartmentChange() {
     }
 }
 
+function initDateSelector() {
+    const dateInput = document.getElementById('appointmentDate');
+    if (!dateInput) return;
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    dateInput.min = todayStr;
+    dateInput.value = todayStr;
+
+    const maxDate = new Date();
+    maxDate.setDate(now.getDate() + 14);
+    dateInput.max = maxDate.toISOString().split('T')[0];
+}
+
+function onDateChange() {
+    const dateInput = document.getElementById('appointmentDate');
+    const leadInput = document.getElementById('leadDays');
+    if (dateInput && leadInput) {
+        const selected = new Date(dateInput.value);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        selected.setHours(0, 0, 0, 0);
+        const diffMs = selected - today;
+        const diffDays = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+        leadInput.value = diffDays;
+    }
+
+    const docSelect = document.getElementById('doctorSelect');
+    if (docSelect && docSelect.value) {
+        onDoctorChange();
+    }
+}
+
 async function onDoctorChange() {
     const docId = document.getElementById('doctorSelect').value;
     const slotSelect = document.getElementById('slotSelect');
+    const dateInput = document.getElementById('appointmentDate');
+    const targetDate = dateInput ? dateInput.value : '';
 
     slotSelect.disabled = true;
     slotSelect.innerHTML = '<option value="" disabled selected>Loading available slots...</option>';
 
     try {
-        const res = await fetch(`/api/doctors/${docId}/slots`);
+        const url = targetDate ? `/api/doctors/${docId}/slots?date=${encodeURIComponent(targetDate)}` : `/api/doctors/${docId}/slots`;
+        const res = await fetch(url);
         const slots = await res.json();
 
         slotSelect.innerHTML = '<option value="" disabled selected>Choose Time Slot...</option>';
         if (slots.length === 0) {
-            slotSelect.innerHTML = '<option value="" disabled>No slots available today</option>';
+            slotSelect.innerHTML = '<option value="" disabled>No consultation slots available for this date</option>';
             return;
         }
 
@@ -391,6 +438,10 @@ async function onDoctorChange() {
         showError("Failed to load slots: " + e.message);
     }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    initDateSelector();
+});
 
 async function handleBooking(e) {
     e.preventDefault();

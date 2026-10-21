@@ -1,9 +1,11 @@
 import os
+import re
+from datetime import datetime, date
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 from src.config import SECRET_KEY
 from src.db import init_db, get_session, ScopedSession
 from src.services import HospitalOPDService
-from src.models import Doctor, Department, Appointment, AppointmentStatus
+from src.models import Doctor, Department, Patient, Appointment, AppointmentStatus
 
 def create_app(custom_engine=None):
     app = Flask(__name__)
@@ -46,18 +48,21 @@ def create_app(custom_engine=None):
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
-        """Hospital Staff & Doctor authentication portal."""
+        """Hospital Staff, Doctor & Patient authentication portal."""
         if request.method == "POST":
             username = request.form.get("username", "").strip()
             password = request.form.get("password", "").strip()
+            next_url = request.args.get("next") or request.form.get("next")
 
-            # Predefined demo credentials for clinical roles
+            # 1. Predefined demo credentials for clinical roles
             if username == "admin" and password == "admin123":
                 session["user"] = {"username": "admin", "role": "Administrator", "name": "Hospital Administrator"}
-                return redirect(url_for("index"))
+                session.pop("patient", None)
+                return redirect(next_url or url_for("index"))
             elif username == "reception" and password == "staff123":
                 session["user"] = {"username": "reception", "role": "Receptionist", "name": "OPD Receptionist"}
-                return redirect(url_for("patient_booking"))
+                session.pop("patient", None)
+                return redirect(next_url or url_for("patient_booking"))
             elif username.startswith("doctor") and password == "doc123":
                 doc_id = 1
                 suffix = username.replace("doctor", "").strip()
@@ -67,20 +72,129 @@ def create_app(custom_engine=None):
                 doc = service.get_doctor_by_id(doc_id)
                 doc_name = doc.name if doc else f"Doctor {doc_id}"
                 session["user"] = {"username": username, "role": "Doctor", "doctor_id": doc_id, "name": doc_name}
-                return redirect(url_for("doctor_dashboard", doctor_id=doc_id))
-            else:
-                return render_template("login.html", error="Invalid credentials. Please use the demo credentials provided below.")
-        return render_template("login.html")
+                session.pop("patient", None)
+                return redirect(next_url or url_for("doctor_dashboard", doctor_id=doc_id))
+
+            # 2. Patient authentication (via 10-digit mobile number or email)
+            service = get_service()
+            patient = service.authenticate_patient(username, password)
+            if patient:
+                session["patient"] = {
+                    "patient_id": patient.patient_id,
+                    "name": patient.name,
+                    "phone": patient.phone,
+                    "role": "Patient"
+                }
+                session.pop("user", None)
+                return redirect(next_url or url_for("patient_dashboard"))
+
+            return render_template("login.html", error="Invalid credentials. For patients, enter your registered 10-digit phone number or email and password. For staff, use demo credentials below.")
+        return render_template("login.html", next=request.args.get("next"))
+
+    @app.route("/register", methods=["GET", "POST"])
+    def register():
+        """Patient registration portal."""
+        if request.method == "POST":
+            name = request.form.get("name", "").strip()
+            phone = request.form.get("phone", "").strip()
+            email = request.form.get("email", "").strip() or None
+            password = request.form.get("password", "").strip()
+            confirm_password = request.form.get("confirm_password", "").strip()
+            age_str = request.form.get("age", "").strip()
+            gender = request.form.get("gender", "Other").strip()
+
+            if password != confirm_password:
+                return render_template("register.html", error="Passwords do not match.", form_data=request.form)
+
+            try:
+                age = int(age_str)
+            except ValueError:
+                return render_template("register.html", error="Please provide a valid numeric age.", form_data=request.form)
+
+            service = get_service()
+            try:
+                patient_data = service.register_patient(
+                    name=name,
+                    phone=phone,
+                    password=password,
+                    age=age,
+                    gender=gender,
+                    email=email
+                )
+                session["patient"] = {
+                    "patient_id": patient_data["patient_id"],
+                    "name": patient_data["name"],
+                    "phone": patient_data["phone"],
+                    "role": "Patient"
+                }
+                session.pop("user", None)
+                return redirect(url_for("patient_dashboard"))
+            except Exception as e:
+                return render_template("register.html", error=str(e), form_data=request.form)
+
+        return render_template("register.html")
+
+    @app.route("/patient/dashboard")
+    def patient_dashboard():
+        """Private patient dashboard to view and manage appointments."""
+        patient_session = session.get("patient")
+        if not patient_session:
+            return redirect(url_for("login", next=request.path))
+
+        patient_id = patient_session["patient_id"]
+        service = get_service()
+        patient = service.session.query(Patient).filter(Patient.patient_id == patient_id).first()
+        if not patient:
+            session.pop("patient", None)
+            return redirect(url_for("login"))
+
+        appointments = service.session.query(Appointment).filter(
+            Appointment.patient_id == patient_id
+        ).order_by(Appointment.appointment_id.desc()).all()
+
+        appt_cards = []
+        for a in appointments:
+            appt_cards.append({
+                "appointment_id": a.appointment_id,
+                "token": service.generate_token(a),
+                "doctor_name": a.doctor.name if a.doctor else "Unassigned",
+                "specialization": a.doctor.specialization if a.doctor else "General",
+                "room_number": a.doctor.room_number if a.doctor else "N/A",
+                "slot_time": f"{a.slot.start_time.strftime('%d %b %Y, %H:%M')} - {a.slot.end_time.strftime('%H:%M')}" if a.slot else "TBD",
+                "status": a.status.value,
+                "can_cancel": a.status in [AppointmentStatus.BOOKED, AppointmentStatus.CONFIRMED, AppointmentStatus.CHECKED_IN],
+                "has_prescription": a.prescription is not None
+            })
+
+        return render_template("patient_dashboard.html", patient=patient, appointments=appt_cards)
 
     @app.route("/logout")
     def logout():
-        """Clear user session and redirect home."""
+        """Clear user & patient sessions and redirect home."""
         session.pop("user", None)
+        session.pop("patient", None)
         return redirect(url_for("index"))
 
     @app.route("/doctor/<int:doctor_id>")
     def doctor_dashboard(doctor_id):
-        """Doctor consultation room interface."""
+        """Doctor consultation room interface protected by role authorization."""
+        user = session.get("user")
+        patient = session.get("patient")
+
+        # Patients cannot enter doctor consultation workstation
+        if patient and not user:
+            return render_template("404.html", message="Access Denied: Only clinical doctors and administrators can access consultation rooms."), 403
+
+        if not user:
+            return redirect(url_for("login", next=request.path))
+
+        if user.get("role") not in ["Doctor", "Administrator"]:
+            return render_template("404.html", message="Access Denied: Only clinical doctors and administrators can access consultation rooms."), 403
+
+        # Doctors can only access their assigned room; Administrator can access all
+        if user.get("role") == "Doctor" and user.get("doctor_id") != doctor_id:
+            return redirect(url_for("doctor_dashboard", doctor_id=user.get("doctor_id")))
+
         service = get_service()
         doctor = service.get_doctor_by_id(doctor_id)
         if not doctor:
@@ -139,8 +253,74 @@ def create_app(custom_engine=None):
     @app.route("/api/doctors/<int:doctor_id>/slots", methods=["GET"])
     def api_doctor_slots(doctor_id):
         service = get_service()
-        slots = service.get_available_slots(doctor_id)
+        date_str = request.args.get("date")
+        target_date = None
+        if date_str:
+            try:
+                target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                target_date = None
+        slots = service.get_available_slots(doctor_id, target_date=target_date)
         return jsonify([s.to_dict() for s in slots])
+
+    @app.route("/api/patient/register", methods=["POST"])
+    def api_patient_register():
+        service = get_service()
+        data = request.get_json() or {}
+        required = ["name", "phone", "password", "age"]
+        for field in required:
+            if field not in data:
+                return jsonify({"success": False, "error": f"Missing required field: {field}"}), 400
+
+        try:
+            patient_data = service.register_patient(
+                name=data["name"],
+                phone=data["phone"],
+                password=data["password"],
+                age=int(data["age"]),
+                gender=data.get("gender", "Other"),
+                email=data.get("email")
+            )
+            return jsonify({"success": True, "patient": patient_data}), 201
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 400
+
+    @app.route("/api/appointments/<int:appointment_id>/cancel", methods=["POST"])
+    def api_cancel_appointment(appointment_id):
+        """Dedicated appointment cancellation endpoint verifying patient ownership."""
+        service = get_service()
+        appt = service.session.query(Appointment).filter(Appointment.appointment_id == appointment_id).first()
+        if not appt:
+            return jsonify({"success": False, "error": f"Appointment #{appointment_id} not found."}), 404
+
+        user = session.get("user")
+        patient_session = session.get("patient")
+        data = request.get_json(silent=True) or {}
+        phone_verify = data.get("phone", "").strip()
+
+        authorized = False
+        if user and user.get("role") in ["Administrator", "Doctor", "Receptionist"]:
+            authorized = True
+        elif patient_session and patient_session.get("patient_id") == appt.patient_id:
+            authorized = True
+        elif phone_verify and re.sub(r"\D", "", phone_verify) == appt.patient.phone:
+            authorized = True
+
+        if not authorized:
+            return jsonify({
+                "success": False,
+                "error": "Access Denied: You are not authorized to cancel this appointment. Please log in or provide your registered mobile number."
+            }), 403
+
+        try:
+            result = service.cancel_appointment(appointment_id)
+            return jsonify({
+                "success": True,
+                "message": "Appointment successfully cancelled and time slot restored.",
+                "data": result
+            })
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 400
 
     @app.route("/api/doctors/<int:doctor_id>/appointments", methods=["GET"])
     def api_doctor_appointments(doctor_id):

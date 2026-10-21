@@ -151,14 +151,118 @@ class HospitalOPDService:
 
         return slots
 
-    def predict_no_show_probability(self, lead_days: int, past_ratio: float, sms_sent: bool, age: int) -> float:
-        """Calculates calibrated probability using the trained Week 4 ML feature equation."""
-        log_odds = -1.8 + (0.14 * lead_days) + (4.0 * past_ratio) - (1.4 if sms_sent else 0.0) - (0.02 * (age - 40))
-        if lead_days == 0:
-            log_odds -= 3.0
-        import numpy as np
-        prob = 1.0 / (1.0 + np.exp(-log_odds))
-        return float(round(prob, 3))
+    def predict_no_show_probability(self, lead_days: int, past_ratio: float, sms_sent: bool, age: int, gender: str = "Female") -> float:
+        """Predicts no-show probability using the trained Week 4 ML pipeline (with calibrated fallback)."""
+        try:
+            from .ml.predictor import NoShowPredictor
+            predictor = NoShowPredictor()
+            return predictor.predict_probability({
+                "lead_days": lead_days,
+                "past_no_show_ratio": past_ratio,
+                "sms_received": 1 if sms_sent else 0,
+                "age": age,
+                "gender": gender,
+                "day_of_week": datetime.now().weekday(),
+                "appointment_hour": 10
+            })
+        except Exception:
+            log_odds = -1.8 + (0.14 * lead_days) + (4.0 * past_ratio) - (1.4 if sms_sent else 0.0) - (0.02 * (age - 40))
+            if lead_days == 0:
+                log_odds -= 3.0
+            import numpy as np
+            prob = 1.0 / (1.0 + np.exp(-log_odds))
+            return float(round(prob, 3))
+
+    def register_patient(
+        self,
+        name: str,
+        phone: str,
+        password: str,
+        age: int,
+        gender: str = "Other",
+        email: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Registers a new patient with secure password hashing and strict duplicate validation.
+        """
+        if not name or len(name.strip()) < 2:
+            raise ValueError("Patient full name must be at least 2 characters long.")
+
+        clean_phone = re.sub(r"\D", "", phone or "")
+        if len(clean_phone) != 10:
+            raise ValueError("Please provide a valid 10-digit mobile number (e.g. 9876543210).")
+
+        if not password or len(password) < 6:
+            raise ValueError("Password must be at least 6 characters long.")
+
+        if not (1 <= age <= 120):
+            raise ValueError(f"Age must be between 1 and 120. Provided: {age}.")
+
+        clean_email = email.strip().lower() if email and email.strip() else None
+        if clean_email:
+            if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", clean_email):
+                raise ValueError(f"Invalid email format: '{clean_email}'.")
+
+        # Check for duplicate phone
+        existing_phone = self.session.query(Patient).filter(Patient.phone == clean_phone).first()
+        if existing_phone:
+            raise ValueError(f"A patient with mobile number {clean_phone} is already registered. Please log in.")
+
+        # Check for duplicate email
+        if clean_email:
+            existing_email = self.session.query(Patient).filter(Patient.email == clean_email).first()
+            if existing_email:
+                raise ValueError(f"A patient with email {clean_email} is already registered. Please log in.")
+
+        patient = Patient(
+            name=name.strip(),
+            phone=clean_phone,
+            email=clean_email,
+            age=age,
+            gender=gender,
+            total_visits=0,
+            past_no_shows=0
+        )
+        patient.set_password(password)
+        self.session.add(patient)
+        self.session.commit()
+        self.session.refresh(patient)
+        return patient.to_dict()
+
+    def authenticate_patient(self, identifier: str, password: str) -> Optional[Patient]:
+        """
+        Authenticates a patient by mobile number OR email and password.
+        """
+        if not identifier or not password:
+            return None
+
+        clean_id = identifier.strip()
+        digits = re.sub(r"\D", "", clean_id)
+
+        patient = None
+        if len(digits) == 10:
+            patient = self.session.query(Patient).filter(Patient.phone == digits).first()
+
+        if not patient:
+            patient = self.session.query(Patient).filter(Patient.email == clean_id.lower()).first()
+
+        if patient and patient.check_password(password):
+            return patient
+        return None
+
+    @staticmethod
+    def mask_patient_name(name: str) -> str:
+        """Masks patient full name for privacy on public hospital display boards."""
+        if not name or name == "-":
+            return "-"
+        parts = name.strip().split()
+        if len(parts) == 1:
+            return f"{parts[0][:3]}***" if len(parts[0]) > 3 else parts[0]
+        return f"{parts[0]} {parts[-1][0]}."
+
+    def cancel_appointment(self, appointment_id: int) -> Dict[str, Any]:
+        """Convenience method to cancel an appointment and release time slot."""
+        return self.update_status(appointment_id, AppointmentStatus.CANCELLED.value)
 
     def book_appointment(
         self,
@@ -403,7 +507,7 @@ class HospitalOPDService:
             ).count()
 
             token = self.generate_token(current_in_room) if current_in_room else "ROOM READY"
-            patient_name = current_in_room.patient.name if current_in_room else "-"
+            patient_name = self.mask_patient_name(current_in_room.patient.name) if current_in_room else "-"
 
             slot_dur = doc.department.default_slot_duration_mins if doc.department else 15
 

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Patient Registration - Smart OPD{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center py-4">
+    <div class="col-md-7 col-lg-6">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-primary text-white py-3 text-center">
+                <h4 class="fw-bold mb-1"><i class="bi bi-person-plus-fill me-2"></i>Patient Registration</h4>
+                <p class="small mb-0 opacity-75">Create your secure outpatient OPD portal account</p>
+            </div>
+            <div class="card-body p-4">
+                {% if error %}
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endif %}
+
+                <form method="POST" action="{{ url_for('register') }}" id="regForm" onsubmit="return validateForm()">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Full Name *</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <input type="text" name="name" id="regName" class="form-control" required minlength="2" 
+                                   value="{{ form_data.name if form_data else '' }}" placeholder="e.g. Ramesh Kumar">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Mobile Number (10 Digits) *</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-phone"></i></span>
+                                <input type="tel" name="phone" id="regPhone" class="form-control" required 
+                                       pattern="[0-9]{10}" maxlength="10" value="{{ form_data.phone if form_data else '' }}" 
+                                       placeholder="e.g. 9876543210">
+                            </div>
+                            <div class="form-text small">Used as your login identifier and for SMS tokens.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Email Address (Optional)</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                                <input type="email" name="email" id="regEmail" class="form-control" 
+                                       value="{{ form_data.email if form_data else '' }}" placeholder="patient@example.com">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Age *</label>
+                            <input type="number" name="age" id="regAge" class="form-control" required min="1" max="120" 
+                                   value="{{ form_data.age if form_data else '30' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Gender *</label>
+                            <select name="gender" id="regGender" class="form-select" required>
+                                <option value="Male" {% if form_data and form_data.gender == 'Male' %}selected{% endif %}>Male</option>
+                                <option value="Female" {% if form_data and form_data.gender == 'Female' %}selected{% endif %}>Female</option>
+                                <option value="Other" {% if form_data and form_data.gender == 'Other' %}selected{% endif %}>Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Password *</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                                <input type="password" name="password" id="regPassword" class="form-control" required minlength="6" placeholder="Min. 6 characters">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Confirm Password *</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-shield-check"></i></span>
+                                <input type="password" name="confirm_password" id="regConfirmPassword" class="form-control" required minlength="6" placeholder="Re-enter password">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid mb-3">
+                        <button type="submit" class="btn btn-primary py-2 fw-semibold">
+                            <i class="bi bi-check-circle-fill me-1"></i> Register &amp; Open Patient Portal
+                        </button>
+                    </div>
+
+                    <div class="text-center text-muted small">
+                        Already have a registered hospital account? <a href="{{ url_for('login') }}" class="fw-bold text-primary">Sign In here</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function validateForm() {
+    const p1 = document.getElementById('regPassword').value;
+    const p2 = document.getElementById('regConfirmPassword').value;
+    if (p1 !== p2) {
+        alert("Passwords do not match. Please re-enter.");
+        return false;
+    }
+    const phone = document.getElementById('regPhone').value.replace(/\D/g, '');
+    if (phone.length !== 10) {
+        alert("Mobile number must be exactly 10 digits.");
+        return false;
+    }
+    return true;
+}
+</script>
+{% endblock %}

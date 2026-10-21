@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Patient Portal - Smart OPD{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="p-4 bg-white rounded-3 shadow-sm border-start border-success border-5 d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div>
+                <div class="badge bg-success-subtle text-success border border-success mb-1">
+                    <i class="bi bi-shield-check me-1"></i> Authenticated Patient Session
+                </div>
+                <h3 class="fw-bold mb-1 text-dark">Welcome, {{ patient.name }}</h3>
+                <p class="text-muted mb-0">
+                    <i class="bi bi-phone me-1"></i> <strong>{{ patient.phone }}</strong> 
+                    {% if patient.email %}&bull; <i class="bi bi-envelope me-1"></i> {{ patient.email }}{% endif %}
+                    &bull; {{ patient.age }} yrs &bull; {{ patient.gender }}
+                </p>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="{{ url_for('patient_booking') }}" class="btn btn-primary">
+                    <i class="bi bi-calendar-plus me-1"></i> Book New Consultation
+                </a>
+                <a href="{{ url_for('patient_token_tracker') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-search me-1"></i> Track Live Queue
+                </a>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
+                    <i class="bi bi-box-arrow-right me-1"></i> Sign Out
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alert Box for Dynamic Actions -->
+<div id="actionAlert" class="alert alert-dismissible fade show d-none" role="alert">
+    <i class="bi bi-info-circle-fill me-2" id="actionAlertIcon"></i>
+    <span id="actionAlertMsg"></span>
+    <button type="button" class="btn-close" onclick="document.getElementById('actionAlert').classList.add('d-none')"></button>
+</div>
+
+<!-- Consultation Appointments Section -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-calendar2-check text-primary me-2"></i>My Scheduled Consultations
+        </h5>
+        <span class="badge bg-primary rounded-pill">{{ appointments|length }} Total</span>
+    </div>
+    <div class="card-body p-4">
+        {% if appointments|length == 0 %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-calendar-x fs-1 opacity-50 mb-3 d-block"></i>
+            <h5 class="fw-bold">No Appointments Found</h5>
+            <p class="small text-muted mb-3">You currently have no active or historical outpatient bookings in this hospital.</p>
+            <a href="{{ url_for('patient_booking') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle me-1"></i> Book Your First OPD Slot
+            </a>
+        </div>
+        {% else %}
+        <div class="row g-3">
+            {% for appt in appointments %}
+            <div class="col-md-6 col-lg-4" id="appt-card-{{ appt.appointment_id }}">
+                <div class="card h-100 border shadow-sm {% if appt.status == 'CANCELLED' %}opacity-75 bg-light{% endif %}">
+                    <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
+                        <span class="font-monospace fw-bold text-primary fs-5">{{ appt.token }}</span>
+                        {% if appt.status == 'CONFIRMED' or appt.status == 'BOOKED' %}
+                        <span class="badge bg-info text-dark" id="status-badge-{{ appt.appointment_id }}">{{ appt.status }}</span>
+                        {% elif appt.status == 'CHECKED_IN' %}
+                        <span class="badge bg-primary" id="status-badge-{{ appt.appointment_id }}">WAITING IN HALL</span>
+                        {% elif appt.status == 'IN_CONSULTATION' %}
+                        <span class="badge bg-success" id="status-badge-{{ appt.appointment_id }}">NOW CONSULTING</span>
+                        {% elif appt.status == 'COMPLETED' %}
+                        <span class="badge bg-dark" id="status-badge-{{ appt.appointment_id }}">COMPLETED</span>
+                        {% elif appt.status == 'CANCELLED' %}
+                        <span class="badge bg-danger" id="status-badge-{{ appt.appointment_id }}">CANCELLED</span>
+                        {% else %}
+                        <span class="badge bg-secondary" id="status-badge-{{ appt.appointment_id }}">{{ appt.status }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <h5 class="fw-bold mb-1">{{ appt.doctor_name }}</h5>
+                        <div class="text-muted small mb-2">{{ appt.specialization }} &bull; <strong>Room {{ appt.room_number }}</strong></div>
+
+                        <div class="p-2 bg-light rounded small mb-3 border">
+                            <div><i class="bi bi-clock me-1 text-primary"></i> <strong>Slot:</strong> {{ appt.slot_time }}</div>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-2 mt-auto">
+                            {% if appt.has_prescription %}
+                            <a href="{{ url_for('view_prescription', appointment_id=appt.appointment_id) }}" target="_blank" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-file-earmark-medical me-1"></i> Prescription
+                            </a>
+                            {% endif %}
+                            <a href="{{ url_for('patient_token_tracker') }}?query={{ appt.token }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-search me-1"></i> Track
+                            </a>
+                            {% if appt.can_cancel %}
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="cancel-btn-{{ appt.appointment_id }}" 
+                                    onclick="cancelAppointment({{ appt.appointment_id }}, '{{ appt.token }}')">
+                                <i class="bi bi-x-circle me-1"></i> Cancel
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+async function cancelAppointment(apptId, token) {
+    if (!confirm(`Are you sure you want to cancel appointment ${token}? This will immediately release the time slot for other waiting patients.`)) {
+        return;
+    }
+
+    const btn = document.getElementById(`cancel-btn-${apptId}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Cancelling...';
+    }
+
+    try {
+        const res = await fetch(`/api/appointments/${apptId}/cancel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        const json = await res.json();
+
+        const alertBox = document.getElementById('actionAlert');
+        const alertMsg = document.getElementById('actionAlertMsg');
+
+        if (json.success) {
+            alertBox.className = "alert alert-success alert-dismissible fade show";
+            alertMsg.textContent = `Appointment ${token} successfully cancelled. The time slot has been returned to the available OPD pool.`;
+            alertBox.classList.remove('d-none');
+
+            // Update badge
+            const badge = document.getElementById(`status-badge-${apptId}`);
+            if (badge) {
+                badge.className = "badge bg-danger";
+                badge.textContent = "CANCELLED";
+            }
+            if (btn) {
+                btn.remove();
+            }
+        } else {
+            alertBox.className = "alert alert-danger alert-dismissible fade show";
+            alertMsg.textContent = `Cancellation failed: ${json.error || 'Unknown error'}`;
+            alertBox.classList.remove('d-none');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-x-circle me-1"></i> Cancel';
+            }
+        }
+    } catch (err) {
+        alert("Network error while cancelling appointment: " + err.message);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-x-circle me-1"></i> Cancel';
+        }
+    }
+}
+</script>
+{% endblock %}

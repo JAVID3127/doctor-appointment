@@ -32,6 +32,9 @@ def init_db(custom_engine=None):
             if "email" not in columns and len(columns) > 0:
                 conn.execute(text("ALTER TABLE patients ADD COLUMN email VARCHAR(120);"))
                 conn.commit()
+            if "password_hash" not in columns and len(columns) > 0:
+                conn.execute(text("ALTER TABLE patients ADD COLUMN password_hash VARCHAR(255);"))
+                conn.commit()
     except Exception:
         pass
 

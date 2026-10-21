@@ -164,3 +164,45 @@ def test_stress_50_patient_requests_zero_overlap():
                     f"Collision in doctor #{doc_id} schedule between "
                     f"'{assigned_reqs[i].request_id}' and '{assigned_reqs[j].request_id}'"
                 )
+
+def test_adjacent_intervals_compatibility():
+    """Adjacent intervals (end_time of A == start_time of B) must not conflict."""
+    base = datetime(2026, 10, 20, 9, 0)
+    req_a = AppointmentRequest("ADJ-1", 1, "P1", "General", base, base + timedelta(minutes=15))
+    req_b = AppointmentRequest("ADJ-2", 2, "P2", "General", base + timedelta(minutes=15), base + timedelta(minutes=30))
+    req_c = AppointmentRequest("ADJ-3", 3, "P3", "General", base + timedelta(minutes=30), base + timedelta(minutes=45))
+
+    # Overlaps method check
+    assert not req_a.overlaps_with(req_b)
+    assert not req_b.overlaps_with(req_c)
+
+    # EFT should accept all 3 contiguous appointments
+    accepted = earliest_finish_time_schedule([req_a, req_b, req_c])
+    assert len(accepted) == 3
+    assert [r.request_id for r in accepted] == ["ADJ-1", "ADJ-2", "ADJ-3"]
+
+def test_identical_overlapping_intervals():
+    """Two requests with identical time intervals conflict; EFT selects exactly one."""
+    base = datetime(2026, 10, 20, 10, 0)
+    req_1 = AppointmentRequest("IDEN-1", 10, "P10", "Cardiology", base, base + timedelta(minutes=30), priority=1)
+    req_2 = AppointmentRequest("IDEN-2", 11, "P11", "Cardiology", base, base + timedelta(minutes=30), priority=2)
+
+    assert req_1.overlaps_with(req_2)
+
+    accepted = earliest_finish_time_schedule([req_1, req_2])
+    assert len(accepted) == 1
+    # Higher priority (priority=2) is selected first
+    assert accepted[0].request_id == "IDEN-2"
+
+def test_non_overlapping_sparse_intervals():
+    """Sparse non-overlapping intervals across the shift should all be accepted."""
+    base = datetime(2026, 10, 20, 9, 0)
+    reqs = [
+        AppointmentRequest(f"SPARSE-{i}", i, f"P{i}", "Pediatrics",
+                           base + timedelta(hours=i),
+                           base + timedelta(hours=i, minutes=20))
+        for i in range(5)
+    ]
+
+    accepted = earliest_finish_time_schedule(reqs)
+    assert len(accepted) == 5

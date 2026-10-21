@@ -30,8 +30,27 @@ class NoShowPredictor:
         Accepts patient and booking attributes dictionary and returns
         calibrated no-show probability P(no-show) between 0.0 and 1.0.
         """
-        # Ensure all required features are present
-        input_data = {feat: [features.get(feat, 0)] for feat in ALL_FEATURES}
+        # Ensure all required features are present with appropriate data types
+        defaults = {
+            "gender": "Female",
+            "day_of_week": 0,
+            "age": 35,
+            "lead_days": 1,
+            "appointment_hour": 10,
+            "past_visits": 1,
+            "past_no_shows": 0,
+            "past_no_show_ratio": 0.0,
+            "sms_received": 1,
+            "hypertension": 0,
+            "diabetes": 0
+        }
+        input_data = {}
+        for feat in ALL_FEATURES:
+            val = features.get(feat)
+            if val is None or (feat == "gender" and not isinstance(val, str)):
+                val = defaults.get(feat, 0)
+            input_data[feat] = [val]
+
         df_input = pd.DataFrame(input_data)
         prob = self.pipeline.predict_proba(df_input)[0, 1]
         return float(round(prob, 3))

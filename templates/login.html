@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Clinical Staff & Doctor Login - Smart OPD{% endblock %}
+{% block title %}Hospital Sign In - Smart OPD{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center py-4">
-    <div class="col-md-6 col-lg-5">
+    <div class="col-md-7 col-lg-5">
         <div class="card shadow-sm border-0">
             <div class="card-header bg-primary text-white py-3 text-center">
-                <h4 class="fw-bold mb-1"><i class="bi bi-shield-lock-fill me-2"></i>Hospital Staff Portal</h4>
-                <p class="small mb-0 opacity-75">Secure access for Doctors, Receptionists & Administrators</p>
+                <h4 class="fw-bold mb-1"><i class="bi bi-shield-lock-fill me-2"></i>Hospital Staff Portal &amp; Patient Sign In</h4>
+                <p class="small mb-0 opacity-75">Secure access for Doctors, Receptionists, Administrators &amp; Patients</p>
             </div>
             <div class="card-body p-4">
                 {% if error %}
@@ -18,43 +18,93 @@
                 </div>
                 {% endif %}
 
-                <form method="POST" action="{{ url_for('login') }}">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Username / Role ID</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
-                            <input type="text" name="username" id="loginUsername" class="form-control" required placeholder="e.g. admin or doctor1">
+                <!-- Role Selector Tabs -->
+                <ul class="nav nav-pills nav-fill mb-4 p-1 bg-light rounded-3" id="loginTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-bold" id="patient-tab" data-bs-toggle="pill" data-bs-target="#patient-login" type="button" role="tab">
+                            <i class="bi bi-person-fill me-1"></i> Patient Portal
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold" id="staff-tab" data-bs-toggle="pill" data-bs-target="#staff-login" type="button" role="tab">
+                            <i class="bi bi-hospital me-1"></i> Doctor / Staff
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="loginTabsContent">
+                    <!-- Tab 1: Patient Login -->
+                    <div class="tab-pane fade show active" id="patient-login" role="tabpanel">
+                        <form method="POST" action="{{ url_for('login', next=next) }}">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">10-Digit Mobile Number OR Email</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-phone-fill text-primary"></i></span>
+                                    <input type="text" name="username" id="patientIdentifier" class="form-control" required placeholder="e.g. 9876543201 or patient@mail.com">
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">Password</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-key-fill text-primary"></i></span>
+                                    <input type="password" name="password" id="patientPassword" class="form-control" required placeholder="Enter your password">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+                                <i class="bi bi-box-arrow-in-right me-1"></i> Sign In to Patient Dashboard
+                            </button>
+                        </form>
+
+                        <div class="text-center mt-3 pt-3 border-top">
+                            <span class="text-muted small">New patient visiting this OPD?</span>
+                            <a href="{{ url_for('register') }}" class="fw-bold text-primary small ms-1">Register New Account</a>
                         </div>
                     </div>
-                    <div class="mb-4">
-                        <label class="form-label fw-semibold">Password</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-key-fill"></i></span>
-                            <input type="password" name="password" id="loginPassword" class="form-control" required placeholder="Enter password">
+
+                    <!-- Tab 2: Hospital Staff Login -->
+                    <div class="tab-pane fade" id="staff-login" role="tabpanel">
+                        <form method="POST" action="{{ url_for('login', next=next) }}">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Staff Username / Doctor ID</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-person-badge-fill text-info"></i></span>
+                                    <input type="text" name="username" id="staffUsername" class="form-control" required placeholder="e.g. admin or doctor1">
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">Password</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-key-fill text-info"></i></span>
+                                    <input type="password" name="password" id="staffPassword" class="form-control" required placeholder="Enter password">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-dark w-100 py-2 fw-semibold">
+                                <i class="bi bi-shield-lock me-1"></i> Access Clinical Console
+                            </button>
+                        </form>
+
+                        <hr class="my-4">
+
+                        <!-- One-click Demo Credentials Helper -->
+                        <div class="bg-light p-3 rounded-3 border">
+                            <div class="small fw-bold text-uppercase text-muted mb-2">
+                                <i class="bi bi-lightning-charge-fill text-warning me-1"></i> Quick Demo Staff Logins (Click to fill)
+                            </div>
+                            <div class="d-flex flex-column gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary text-start" onclick="fillStaffCreds('admin', 'admin123')">
+                                    <strong>Administrator:</strong> <code>admin</code> / <code>admin123</code> (Full OPD Command)
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-success text-start" onclick="fillStaffCreds('doctor1', 'doc123')">
+                                    <strong>Dr. Rajesh Sharma:</strong> <code>doctor1</code> / <code>doc123</code> (Room OPD-101)
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-info text-start" onclick="fillStaffCreds('doctor3', 'doc123')">
+                                    <strong>Dr. Vikram Patel:</strong> <code>doctor3</code> / <code>doc123</code> (Cardiology OPD-201)
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary text-start" onclick="fillStaffCreds('reception', 'staff123')">
+                                    <strong>Reception Desk:</strong> <code>reception</code> / <code>staff123</code> (Walk-in &amp; Triage)
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
-                        <i class="bi bi-box-arrow-in-right me-1"></i> Sign In to OPD Console
-                    </button>
-                </form>
-
-                <hr class="my-4">
-
-                <!-- One-click Demo Credentials Helper -->
-                <div class="bg-light p-3 rounded-3 border">
-                    <div class="small fw-bold text-uppercase text-muted mb-2">
-                        <i class="bi bi-lightning-charge-fill text-warning me-1"></i> Quick Demo Logins (Click to autofill)
-                    </div>
-                    <div class="d-flex flex-column gap-2">
-                        <button type="button" class="btn btn-sm btn-outline-primary text-start" onclick="fillCreds('admin', 'admin123')">
-                            <strong>Administrator:</strong> <code>admin</code> / <code>admin123</code> (Full OPD Command)
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-success text-start" onclick="fillCreds('doctor1', 'doc123')">
-                            <strong>Dr. Rajesh Sharma:</strong> <code>doctor1</code> / <code>doc123</code> (Room OPD-101)
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-info text-start" onclick="fillCreds('doctor3', 'doc123')">
-                            <strong>Dr. Vikram Patel:</strong> <code>doctor3</code> / <code>doc123</code> (Cardiology OPD-201)
-                        </button>
                     </div>
                 </div>
             </div>
@@ -63,9 +113,9 @@
 </div>
 
 <script>
-function fillCreds(u, p) {
-    document.getElementById('loginUsername').value = u;
-    document.getElementById('loginPassword').value = p;
+function fillStaffCreds(u, p) {
+    document.getElementById('staffUsername').value = u;
+    document.getElementById('staffPassword').value = p;
 }
 </script>
 {% endblock %}

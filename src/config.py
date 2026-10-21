@@ -10,6 +10,10 @@ SECRET_KEY = os.getenv("SECRET_KEY", "hospital-opd-secret-key-week6")
 DB_PATH = DATA_DIR / "opd_hospital.db"
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
 
+# Fix Render PostgreSQL dialect prefix for SQLAlchemy 2.0 (postgres:// -> postgresql://)
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 # Operating standards
 OPD_START_HOUR = 9
 OPD_END_HOUR = 17
