@@ -23,6 +23,21 @@
                     <button type="button" class="btn-close" onclick="document.getElementById('bookingAlert').classList.add('d-none')"></button>
                 </div>
 
+                <!-- Problem Statement 27 Flowchart Workflow Stepper -->
+                <div class="card bg-light border-0 mb-4 p-2 shadow-sm">
+                    <div class="d-flex justify-content-between align-items-center text-center small text-muted flex-wrap gap-1">
+                        <span class="badge bg-primary px-2 py-1"><i class="bi bi-person me-1"></i> 1. Patient Details</span>
+                        <i class="bi bi-chevron-right text-secondary small"></i>
+                        <span class="badge bg-white text-dark border px-2 py-1"><i class="bi bi-hospital me-1"></i> 2. Specialization &amp; Doctor</span>
+                        <i class="bi bi-chevron-right text-secondary small"></i>
+                        <span class="badge bg-white text-dark border px-2 py-1"><i class="bi bi-calendar2-range me-1"></i> 3. Date &amp; Time Slot</span>
+                        <i class="bi bi-chevron-right text-secondary small"></i>
+                        <span class="badge bg-white text-dark border px-2 py-1"><i class="bi bi-cpu me-1"></i> 4. No-Show &amp; Overbooking</span>
+                        <i class="bi bi-chevron-right text-secondary small"></i>
+                        <span class="badge bg-white text-dark border px-2 py-1"><i class="bi bi-ticket-perforated me-1"></i> 5. Token Issued</span>
+                    </div>
+                </div>
+
                 <!-- AI Symptom-to-Specialty Checker Box -->
                 <div class="card bg-light border-primary border-opacity-25 mb-4 shadow-sm">
                     <div class="card-body p-3">
@@ -502,13 +517,48 @@ async function handleBooking(e) {
             modal.show();
             document.getElementById('bookingForm').reset();
         } else {
-            showError("Booking Failed: " + (json.error || "Unknown error"));
+            const errMsg = json.error || "Unknown error";
+            showError("Booking Failed: " + errMsg);
+            // Problem Statement 27 Flowchart: Find Alternative Slot on unavailability or conflict
+            if (errMsg.includes("capacity") || errMsg.includes("booked") || errMsg.includes("already hold") || errMsg.includes("conflict")) {
+                suggestAlternativeSlot();
+            }
         }
     } catch (err) {
         showError("Error connecting to server: " + err.message);
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i> Confirm &amp; Generate OPD Token';
+    }
+}
+
+function suggestAlternativeSlot() {
+    const slotSelect = document.getElementById('slotSelect');
+    if (!slotSelect) return;
+    const currentVal = slotSelect.value;
+    const availableOptions = Array.from(slotSelect.options).filter(opt => opt.value && opt.value !== currentVal && !opt.disabled && !opt.textContent.includes('Buffer'));
+    if (availableOptions.length > 0) {
+        const nextSlot = availableOptions[0];
+        slotSelect.value = nextSlot.value;
+        const alertBox = document.getElementById('bookingAlert');
+        const suggestDiv = document.createElement('div');
+        suggestDiv.id = 'alternativeSlotNotice';
+        suggestDiv.className = 'mt-3 pt-2 border-top text-dark';
+        suggestDiv.innerHTML = `
+            <div class="alert alert-info py-2 mb-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <i class="bi bi-arrow-repeat me-1 text-primary"></i> 
+                    <strong>Alternative Slot Auto-Selected:</strong> 
+                    <code>${nextSlot.textContent}</code> (Checking availability...)
+                </div>
+                <button type="button" class="btn btn-sm btn-primary fw-semibold" onclick="document.getElementById('submitBtn').click()">
+                    Book Alternative Slot Now
+                </button>
+            </div>
+        `;
+        const oldNotice = document.getElementById('alternativeSlotNotice');
+        if (oldNotice) oldNotice.remove();
+        alertBox.appendChild(suggestDiv);
     }
 }
 </script>
